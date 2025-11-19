@@ -1,0 +1,19 @@
+/**
+ * CSS стили для административных страниц плагина Rybinsk Lab Security.
+ */
+.rls-wrap .rls-container{display:flex;flex-wrap:wrap;gap:20px}.rls-wrap .rls-main-content{flex:1;min-width:400px}.rls-wrap .rls-sidebar{width:280px;flex-shrink:0}.rls-box{background:#fff;border:1px solid #ccd0d4;padding:20px;border-radius:4px;margin-bottom:20px}.rls-box h2{margin-top:0;padding-bottom:10px;border-bottom:1px solid #eee}.license-status .status-valid{color:#28a745;font-weight:700}.license-status .status-invalid{color:#dc3545;font-weight:700}.license-status .status-inactive{color:#6c757d;font-weight:700}.author-box a.button-primary{display:block;text-align:center;margin-top:10px}
+/* --- Стили для Сканера и Вкладок --- */
+.rls-tab-panel{padding:20px 0 0;display:none}.rls-tab-panel.active{display:block}.snapshot-info{margin-bottom:15px;color:#555}.rls-scan-controls{display:flex;gap:10px;align-items:center}.rls-scan-progress-area{display:flex;align-items:center;gap:10px;margin-top:20px}.rls-scan-progress-area .spinner{visibility:hidden;margin:0}#rls-scan-progress-container{flex-grow:1;background-color:#e9ecef;border-radius:4px;overflow:hidden}#rls-scan-progress-bar{width:0;height:25px;background-color:#007bff;text-align:center;line-height:25px;color:#fff;transition:width .4s ease;font-weight:700}#rls-scan-status{margin-top:10px;font-style:italic;color:#555;min-height:20px;word-break:break-all}
+/* --- Стили для Таблицы Результатов --- */
+#rls-scan-results .results-title{margin-top:0}
+#rls-scan-results .wp-list-table {margin-top: 15px;}
+#rls-scan-results .wp-list-table code {word-break: break-all;}
+#rls-scan-results .status-cell .spinner {float: none; vertical-align: middle; margin-right: 5px;}
+#rls-scan-results tr.is-clean {background-color: #e7f7e8 !important;}
+#rls-scan-results tr.is-danger {background-color: #fbeaea !important;}
+#rls-scan-results .status-whitelisted {color: #28a745; font-weight: bold;}
+#rls-scan-results .status-ai-legitimate {color: #1a73e8; font-weight: bold;}
+#rls-scan-results .status-ai-virus {color: #dc3545; font-weight: bold;}
+#rls-scan-results .virus-snippet {margin-top: 10px; background: #fff8e5; border: 1px solid #ffc107; padding: 10px; border-radius: 4px; white-space: pre-wrap; font-family: monospace; font-size: 12px;}
+/* Стили для результатов сканера изменений */
+#rls-results-content ul{list-style-type:none;padding-left:0;max-height:400px;overflow-y:auto;border:1px solid #ddd}#rls-results-content li{padding:10px;border-bottom:1px solid #f0f0f1;word-break:break-all;display:flex;gap:10px;align-items:center}#rls-results-content li.added{color:#28a745}#rls-results-content li.modified{color:#fd7e14}#rls-results-content li.deleted{color:#dc3545;text-decoration:line-through}#rls-results-content li:nth-child(odd){background-color:#f8f9fa}.rls-results-clean{color:#28a745;font-size:1.2em}
