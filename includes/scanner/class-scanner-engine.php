@@ -1,7 +1,7 @@
 <?php
 /**
  * Класс RLS_Scanner_Engine
- * Улучшенная версия: возвращает не только файл, но и найденную в нем сигнатуру.
+ * Логика сканирования файлов, снимков и сравнения.
  * Автор: Усачёв Денис (https://rybinsklab.ru)
  */
 
@@ -83,8 +83,8 @@ class RLS_Scanner_Engine {
     }
     
     /**
-     * AJAX: Шаг 2 (Сканер вирусов). Сканирует порцию файлов.
-     * ЭТОТ МЕТОД ТЕПЕРЬ ГАРАНТИРОВАННО ВОЗВРАЩАЕТ ОБЪЕКТЫ {file, signature}.
+     * AJAX: Шаг 2 (Сканер вирусов). 
+     * ИСПРАВЛЕНО: Теперь учитывает Белый список.
      */
     public function ajax_perform_scan_step() {
         check_ajax_referer('rls_scanner_nonce', 'nonce');
@@ -93,6 +93,8 @@ class RLS_Scanner_Engine {
         if ($file_list === false) wp_send_json_error('Сессия сканирования истекла.');
 
         $files_to_scan = array_slice($file_list, $offset, self::SCAN_BATCH_SIZE);
+        
+        // Подготовка сигнатур
         $signatures = get_option('rls_base_signatures', []);
         if (get_option('rls_license_status') === 'valid') {
             $premium_signatures = get_option('rls_premium_signatures', []);
@@ -104,10 +106,24 @@ class RLS_Scanner_Engine {
         }
         $signatures = array_unique($signatures);
         
+        // Загружаем белый список
+        $whitelist = get_option('rls_whitelist', []);
+
         $found_threats = [];
         foreach ($files_to_scan as $file_path) {
+            
+            // Проверка белого списка
+            if (isset($whitelist[$file_path])) {
+                $current_hash = @md5_file($file_path);
+                if ($current_hash === $whitelist[$file_path]) {
+                    // Файл в белом списке и не менялся — пропускаем
+                    continue; 
+                }
+            }
+
             $content = @file_get_contents($file_path);
             if ($content === false) continue;
+            
             foreach ($signatures as $signature) {
                 $trimmed_sig = trim($signature);
                 if (empty($trimmed_sig)) continue;
@@ -139,7 +155,6 @@ class RLS_Scanner_Engine {
         wp_send_json_success('Сканирование на вирусы завершено.');
     }
     
-    // Остальные методы для снимков остаются без изменений
     public function ajax_create_snapshot_step(){ check_ajax_referer('rls_scanner_nonce','nonce');$offset=isset($_POST['offset'])?intval($_POST['offset']):0;$file_list=get_transient('rls_scan_file_list');if($file_list===false)wp_send_json_error('Сессия истекла.');$files_to_process=array_slice($file_list,$offset,self::SCAN_BATCH_SIZE);$snapshot_part=[];foreach($files_to_process as $file_path){$snapshot_part[$file_path]=@md5_file($file_path);}wp_send_json_success(['snapshot_part'=>$snapshot_part,'processed_count'=>count($files_to_process)]);}
     public function ajax_finalize_snapshot(){check_ajax_referer('rls_scanner_nonce','nonce');$full_snapshot=isset($_POST['snapshot'])?json_decode(stripslashes($_POST['snapshot']),true):[];if(is_array($full_snapshot)){update_option('rls_snapshot_data',$full_snapshot);update_option('rls_snapshot_time',time());}delete_transient('rls_scan_file_list');delete_transient('rls_dirs_to_scan');wp_send_json_success('Снимок успешно создан/обновлен.');}
     public function ajax_compare_snapshot_step(){check_ajax_referer('rls_scanner_nonce','nonce');$offset=isset($_POST['offset'])?intval($_POST['offset']):0;$file_list=get_transient('rls_scan_file_list');$original_snapshot=get_option('rls_snapshot_data',[]);if($file_list===false)wp_send_json_error('Сессия истекла.');$files_to_process=array_slice($file_list,$offset,self::SCAN_BATCH_SIZE);$changes=['added'=>[],'modified'=>[]];foreach($files_to_process as $file_path){if(!isset($original_snapshot[$file_path])){$changes['added'][]=$file_path;}else{$current_hash=@md5_file($file_path);if($current_hash!==$original_snapshot[$file_path]){$changes['modified'][]=$file_path;}}}wp_send_json_success(['changes'=>$changes,'processed_count'=>count($files_to_process)]);}
