@@ -2,7 +2,6 @@
 /**
  * Класс RLS_API_Client
  * Отвечает за все коммуникации с удаленным API-сервером.
- * Добавлен метод для AI-анализа.
  * Автор: Усачёв Денис (https://rybinsklab.ru)
  */
 
@@ -51,15 +50,35 @@ class RLS_API_Client {
     }
 
     /**
-     * НОВЫЙ МЕТОД: Отправляет фрагмент кода на сервер для AI-анализа.
-     * @param string $snippet Фрагмент кода для анализа.
-     * @return array|WP_Error Ответ от сервера.
+     * Отправляет фрагмент кода на сервер для AI-анализа.
+     * Считает использование токенов и запросов.
      */
     public static function analyze_code_snippet($snippet) {
-        return self::send_request([
+        $response = self::send_request([
             'action' => 'analyze_code_snippet',
             'snippet' => $snippet,
             'site_url' => home_url()
         ]);
+
+        // Учет статистики AI, если запрос прошел успешно
+        if (!is_wp_error($response) && is_array($response) && isset($response['status']) && $response['status'] === 'success') {
+            // Увеличиваем счетчик запросов
+            RLS_Stats_Helper::increment_stat('ai_requests');
+
+            // Пытаемся найти данные о токенах. 
+            // Проверяем стандартные форматы ответа OpenAI или RybinskLab
+            $tokens = 0;
+            if (isset($response['data']['tokens_used'])) {
+                $tokens = (int)$response['data']['tokens_used'];
+            } elseif (isset($response['data']['usage']['total_tokens'])) {
+                $tokens = (int)$response['data']['usage']['total_tokens'];
+            }
+            
+            if ($tokens > 0) {
+                RLS_Stats_Helper::increment_stat('ai_tokens', $tokens);
+            }
+        }
+
+        return $response;
     }
 }
