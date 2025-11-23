@@ -3,7 +3,7 @@
  * Plugin Name:       Rybinsk Lab Security
  * Plugin URI:        https://rybinsklab.ru/scan-wp/
  * Description:       Комплексное решение для безопасности: сканер вредоносного кода, базовый фаервол (WAF), мониторинг файлов, защита входа и сбор статистики. Авторское право: Усачёв Денис.
- * Version:           1.3.0
+ * Version:           1.4.2
  * Author:            Усачёв Денис
  * Author URI:        https://rybinsklab.ru/
  * License:           GPL v2 or later
@@ -19,7 +19,7 @@ if (!defined('WPINC')) {
 /**
  * Определяем основные константы плагина.
  */
-define('RLS_VERSION', '1.4.2');
+define('RLS_VERSION', '1.3.0');
 define('RLS_API_URL', 'https://rybinsklab.ru/scan-wp/api/index.php');
 define('RLS_PLUGIN_FILE', __FILE__);
 define('RLS_PLUGIN_PATH', plugin_dir_path(__FILE__));
