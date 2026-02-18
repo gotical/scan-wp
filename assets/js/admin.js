@@ -1,231 +1,268 @@
 /**
- * JavaScript для СТРАНИЦЫ НАСТРОЕК (Settings Page).
- * Обрабатывает добавление/удаление вопросов, сигнатур и переключение опций.
- * 
- * Файл: assets/js/admin.js
+ * JavaScript для страницы настроек и модального окна деактивации.
+ * Rybinsk Lab Security v1.5.3
  */
 jQuery(function($) {
     
     // =======================================================
-    // 1. ЛОГИКА ЗАЩИТЫ ВХОДА (Переключение видимости)
+    // 1. УПРАВЛЕНИЕ ВКЛАДКАМИ (TABS)
     // =======================================================
-    const loginSecurityCheckbox = $('#rls_enable_login_security_cb');
-    const loginQuestionsRows = $('.login-questions-settings-row');
+    
+    $('.rls-nav-tabs a').on('click', function(e) {
+        e.preventDefault();
+        
+        // Убираем активность
+        $('.rls-nav-tabs a').removeClass('nav-tab-active');
+        $(this).addClass('nav-tab-active');
+        
+        // Скрываем все вкладки
+        $('.rls-tab-content').hide();
+        
+        // Показываем нужную
+        const target = $(this).attr('href');
+        $(target).show();
+        
+        // Сохраняем состояние в URL
+        window.location.hash = target;
+    });
 
-    function toggleLoginSettings() {
-        if (loginSecurityCheckbox.is(':checked')) {
-            loginQuestionsRows.show();
-        } else {
-            loginQuestionsRows.hide();
+    // Открытие вкладки по хешу в URL
+    if (window.location.hash) {
+        const hash = window.location.hash;
+        if ($(hash).length > 0) {
+            $('.rls-nav-tabs a[href="' + hash + '"]').click();
         }
     }
 
-    // Слушаем изменения чекбокса
-    loginSecurityCheckbox.on('change', toggleLoginSettings);
+    // =======================================================
+    // 2. МОДАЛЬНОЕ ОКНО ДЕАКТИВАЦИИ
+    // =======================================================
     
-    // Запускаем при загрузке страницы, чтобы установить правильное состояние
+    const deactivateLink = $('tr[data-slug="rybinsklab-security"] .deactivate a');
+    const modal = $('#rls-deactivation-modal');
+    
+    if (deactivateLink.length > 0 && modal.length > 0) {
+        let finalDeactivationUrl = deactivateLink.attr('href');
+
+        // Перехват клика
+        deactivateLink.on('click', function(e) {
+            e.preventDefault();
+            modal.fadeIn(200);
+        });
+
+        // Отмена
+        $('.rls-cancel-btn').on('click', function() {
+            modal.fadeOut(200);
+        });
+
+        // Продолжить (Шаг 1)
+        $('.rls-next-btn').on('click', function() {
+            const choice = $('input[name="rls_wipe_choice"]:checked').val();
+            
+            if (choice === 'keep') {
+                savePrefAndRedirect(false); // Сохраняем данные
+            } else {
+                // Переход к шагу 2
+                $('#rls-step-1').hide();
+                $('#rls-step-2').fadeIn(200);
+            }
+        });
+
+        // Удалить окончательно (Шаг 2)
+        $('.rls-final-deactivate-btn').on('click', function() {
+            const btn = $(this);
+            btn.text('Очистка данных...').prop('disabled', true);
+            savePrefAndRedirect(true); // Удаляем данные
+        });
+
+        function savePrefAndRedirect(wipeData) {
+            $.post(ajaxurl, {
+                action: 'rls_save_uninstall_pref',
+                wipe: wipeData
+            }).always(function() {
+                window.location.href = finalDeactivationUrl;
+            });
+        }
+    }
+
+    // =======================================================
+    // 3. UI ИНТЕРАКТИВ
+    // =======================================================
+
+    // Показ/скрытие настроек вопросов
+    const loginCb = $('#rls_enable_login_security_cb');
+    const loginRows = $('.login-questions-settings-row');
+    function toggleLoginSettings() {
+        if (loginCb.is(':checked')) loginRows.slideDown(200);
+        else loginRows.slideUp(200);
+    }
+    loginCb.on('change', toggleLoginSettings);
     toggleLoginSettings();
 
-
     // =======================================================
-    // 2. УПРАВЛЕНИЕ КОНТРОЛЬНЫМИ ВОПРОСАМИ
+    // 4. AJAX: УПРАВЛЕНИЕ СПИСКАМИ IP
     // =======================================================
 
-    // --- Добавление вопроса ---
-    $('#rls-add-login-question-button').on('click', function(e) {
+    // Добавление IP
+    $('.rls-add-ip-btn').on('click', function(e) {
         e.preventDefault();
         
         const btn = $(this);
-        const spinner = btn.siblings('.spinner');
-        const questionInput = $('#rls-new-login-question');
-        const answerInput = $('#rls-new-login-answer');
-        
-        const question = questionInput.val().trim();
-        const answer = answerInput.val().trim();
+        const listType = btn.data('list'); // 'white' or 'black'
+        const input = (listType === 'white') ? $('#rls-new-white-ip') : $('#rls-new-black-ip');
+        const ip = input.val().trim();
+        const listUl = (listType === 'white') ? $('#rls-white-list') : $('#rls-black-list');
 
-        if (!question || !answer) {
-            alert('Вопрос и ответ не могут быть пустыми.');
-            return;
-        }
-
-        // Блокируем интерфейс
-        spinner.css('visibility', 'visible');
-        btn.prop('disabled', true);
-
-        // Отправляем запрос
-        $.post(rls_admin_data.ajax_url, {
-            action: 'rls_add_login_question',
-            nonce: rls_admin_data.questions_nonce, // Используем nonce из локализации
-            question: question,
-            answer: answer
-        })
-        .done(function(res) {
-            if (res.success) {
-                // Добавляем новую строку в таблицу
-                $('#rls-login-questions-tbody').append(
-                    `<tr data-key="${res.data.key}">
-                        <td>${escapeHtml(res.data.question)}</td>
-                        <td><button class="button-link-delete rls-delete-login-question-button">Удалить</button></td>
-                    </tr>`
-                );
-                
-                // Очищаем поля
-                questionInput.val('');
-                answerInput.val('');
-                
-                // Удаляем сообщение "Нет вопросов", если оно было
-                $('.no-items', '#rls-login-questions-tbody').remove();
-            } else {
-                alert('Ошибка: ' + (res.data || 'Неизвестная ошибка'));
-            }
-        })
-        .fail(function() {
-            alert('Ошибка сервера. Попробуйте обновить страницу.');
-        })
-        .always(function() {
-            spinner.css('visibility', 'hidden');
-            btn.prop('disabled', false);
-        });
-    });
-
-    // --- Удаление вопроса ---
-    // Используем делегирование (on click), так как элементы могут быть добавлены динамически
-    $('#rls-login-questions-tbody').on('click', '.rls-delete-login-question-button', function(e) {
-        e.preventDefault();
-        
-        if (!confirm('Вы уверены, что хотите удалить этот вопрос?')) return;
-
-        const btn = $(this);
-        const row = btn.closest('tr');
-        const key = row.data('key');
-
-        btn.text('Удаление...');
-        btn.prop('disabled', true);
-
-        $.post(rls_admin_data.ajax_url, {
-            action: 'rls_delete_login_question',
-            nonce: rls_admin_data.questions_nonce,
-            key: key
-        })
-        .done(function(res) {
-            if (res.success) {
-                row.fadeOut(300, function() { 
-                    $(this).remove(); 
-                    // Если удалили последний элемент, можно показать заглушку (опционально)
-                    if ($('#rls-login-questions-tbody tr').length === 0) {
-                       $('#rls-login-questions-tbody').html('<tr class="no-items"><td colspan="2">Список вопросов пуст.</td></tr>');
-                    }
-                });
-            } else {
-                alert('Ошибка: ' + res.data);
-                btn.text('Удалить');
-                btn.prop('disabled', false);
-            }
-        })
-        .fail(function() {
-            alert('Ошибка сервера.');
-            btn.text('Удалить');
-            btn.prop('disabled', false);
-        });
-    });
-
-
-    // =======================================================
-    // 3. УПРАВЛЕНИЕ СИГНАТУРАМИ (База вирусов)
-    // =======================================================
-
-    // --- Добавление сигнатуры ---
-    $('#rls-add-signature-button').on('click', function(e) {
-        e.preventDefault();
-        
-        const btn = $(this);
-        const input = $('#rls-new-signature-input');
-        const spinner = btn.siblings('.spinner');
-        const sig = input.val().trim();
-
-        if (!sig) {
+        if (!ip) {
             input.css('border-color', 'red');
             return;
         }
+
+        btn.prop('disabled', true).text('...');
+
+        $.post(rls_admin_data.ajax_url, {
+            action: 'rls_add_ip_list',
+            nonce: rls_admin_data.settings_nonce,
+            ip: ip,
+            list: listType
+        })
+        .done(function(res) {
+            if (res.success) {
+                input.val('').css('border-color', '');
+                listUl.append(
+                    `<li>
+                        <span>${escapeHtml(res.data.ip)}</span> 
+                        <a href="#" class="rls-del-ip" data-ip="${escapeHtml(res.data.ip)}" data-list="${listType}">&times;</a>
+                    </li>`
+                );
+            } else {
+                alert('Ошибка: ' + (res.data || 'Неверный IP'));
+            }
+        })
+        .always(function() {
+            btn.prop('disabled', false).text(listType === 'black' ? 'Забанить' : 'Добавить');
+        });
+    });
+
+    // Удаление IP
+    $(document).on('click', '.rls-del-ip', function(e) {
+        e.preventDefault();
+        if (!confirm('Удалить IP из списка?')) return;
+
+        const link = $(this);
+        const li = link.closest('li');
         
-        input.css('border-color', '');
-        spinner.css('visibility', 'visible');
+        $.post(rls_admin_data.ajax_url, {
+            action: 'rls_delete_ip_list',
+            nonce: rls_admin_data.settings_nonce,
+            ip: link.data('ip'),
+            list: link.data('list')
+        })
+        .done(function(res) {
+            if (res.success) {
+                li.fadeOut(200, function(){ $(this).remove(); });
+            }
+        });
+    });
+
+    // =======================================================
+    // 5. AJAX: ВОПРОСЫ И СИГНАТУРЫ
+    // =======================================================
+
+    // Добавление вопроса
+    $('#rls-add-login-question-button').on('click', function(e) {
+        e.preventDefault();
+        const btn = $(this);
+        const qInput = $('#rls-new-login-question');
+        const aInput = $('#rls-new-login-answer');
+        const q = qInput.val().trim();
+        const a = aInput.val().trim();
+
+        if (!q || !a) return;
+        btn.prop('disabled', true);
+
+        $.post(rls_admin_data.ajax_url, {
+            action: 'rls_add_login_question',
+            nonce: rls_admin_data.questions_nonce,
+            question: q,
+            answer: a
+        }).done(function(res) {
+            if (res.success) {
+                $('#rls-login-questions-tbody').append(
+                    `<tr data-key="${res.data.key}">
+                        <td>${escapeHtml(res.data.q)}</td>
+                        <td><button class="button-link-delete rls-delete-login-question-button">Удалить</button></td>
+                    </tr>`
+                );
+                qInput.val(''); aInput.val('');
+                $('.no-items', '#rls-login-questions-tbody').remove();
+            }
+        }).always(function(){ btn.prop('disabled', false); });
+    });
+
+    // Удаление вопроса
+    $(document).on('click', '.rls-delete-login-question-button', function(e) {
+        e.preventDefault();
+        if(!confirm('Удалить вопрос?')) return;
+        const btn = $(this);
+        const row = btn.closest('tr');
+        
+        $.post(rls_admin_data.ajax_url, {
+            action: 'rls_delete_login_question',
+            nonce: rls_admin_data.questions_nonce,
+            key: row.data('key')
+        }).done(function(res){ if(res.success) row.remove(); });
+    });
+
+    // Добавление сигнатуры
+    $('#rls-add-signature-button').on('click', function(e) {
+        e.preventDefault();
+        const btn = $(this);
+        const input = $('#rls-new-signature-input');
+        const sig = input.val().trim();
+
+        if (!sig) return;
         btn.prop('disabled', true);
 
         $.post(rls_admin_data.ajax_url, {
             action: 'rls_add_signature',
-            nonce: rls_admin_data.signatures_nonce, // Используем nonce из локализации
+            nonce: rls_admin_data.signatures_nonce,
             signature: sig
-        })
-        .done(function(res) {
+        }).done(function(res) {
             if (res.success) {
-                // Добавляем строку в таблицу
                 $('#rls-signatures-table-body').append(
                     `<tr data-signature="${escapeHtml(res.data.signature)}">
-                        <td class="signature-code"><code>${escapeHtml(res.data.signature)}</code></td>
-                        <td><span class="sig-source sig-source-пользовательская">Пользовательская</span></td>
+                        <td><code>${escapeHtml(res.data.signature)}</code></td>
                         <td><button class="button-link-delete rls-delete-signature-button">Удалить</button></td>
                     </tr>`
                 );
-                
                 input.val('');
                 $('.no-items', '#rls-signatures-table-body').remove();
-            } else {
-                alert('Ошибка: ' + res.data);
             }
-        })
-        .fail(function() {
-            alert('Ошибка сервера.');
-        })
-        .always(function() {
-            spinner.css('visibility', 'hidden');
-            btn.prop('disabled', false);
-        });
+        }).always(function(){ btn.prop('disabled', false); });
     });
 
-    // --- Удаление сигнатуры ---
-    $('#rls-signatures-table-body').on('click', '.rls-delete-signature-button', function(e) {
+    // Удаление сигнатуры
+    $(document).on('click', '.rls-delete-signature-button', function(e) {
         e.preventDefault();
-        
-        if (!confirm('Вы уверены, что хотите удалить эту сигнатуру?')) return;
-
+        if(!confirm('Удалить сигнатуру?')) return;
         const btn = $(this);
         const row = btn.closest('tr');
-        const signature = row.data('signature');
-
-        btn.text('Удаление...');
-        btn.prop('disabled', true);
-
+        
         $.post(rls_admin_data.ajax_url, {
             action: 'rls_delete_signature',
             nonce: rls_admin_data.signatures_nonce,
-            signature: signature
-        })
-        .done(function(res) {
-            if (res.success) {
-                row.fadeOut(300, function() { $(this).remove(); });
-            } else {
-                alert('Ошибка: ' + res.data);
-                btn.text('Удалить');
-                btn.prop('disabled', false);
-            }
-        })
-        .fail(function() {
-            alert('Ошибка сервера.');
-            btn.text('Удалить');
-            btn.prop('disabled', false);
-        });
+            signature: row.data('signature')
+        }).done(function(res){ if(res.success) row.remove(); });
     });
 
-    // Вспомогательная функция для безопасности (XSS prevention)
+    // Хелпер для экранирования HTML
     function escapeHtml(text) {
-        if (text === null || typeof text === 'undefined') return '';
-        return String(text)
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
+        if (!text) return text;
+        return text.replace(/&/g, "&amp;")
+                   .replace(/</g, "&lt;")
+                   .replace(/>/g, "&gt;")
+                   .replace(/"/g, "&quot;")
+                   .replace(/'/g, "&#039;");
     }
-
 });

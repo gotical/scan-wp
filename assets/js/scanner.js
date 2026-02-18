@@ -1,120 +1,112 @@
 /**
- * JavaScript для СТРАНИЦЫ СКАНЕРА (Scanner Page).
- * Управляет вкладками, процессом сканирования, снимками и обезвреживанием.
+ * JavaScript для Сканера (Rybinsk Lab Security).
+ * Версия: 1.6.0 (Complete: Scan + AI + Quarantine)
  */
+
 jQuery(function($) {
     
-    // --- 1. Элементы интерфейса ---
-    const startScanBtn = $('#rls-start-scan-button');
-    const createSnapshotBtn = $('#rls-create-snapshot-button');
-    const compareSnapshotBtn = $('#rls-compare-snapshot-button');
-    
-    const progressBarContainer = $('#rls-scan-progress-container');
-    const progressBar = $('#rls-scan-progress-bar');
-    const statusText = $('#rls-scan-status');
-    const resultsContainer = $('#rls-results-content');
-    const spinner = $('.rls-scan-progress-area .spinner');
-    
-    // --- 2. Переменные состояния ---
+    // Элементы UI
+    const startScanBtn        = $('#rls-start-scan-button');
+    const createSnapshotBtn   = $('#rls-create-snapshot-button');
+    const compareSnapshotBtn  = $('#rls-compare-snapshot-button');
+    const progressBarArea     = $('.rls-scan-progress-area');
+    const progressBar         = $('#rls-scan-progress-bar');
+    const statusText          = $('#rls-scan-status');
+    const statusTitle         = $('#rls-scan-status-title');
+    const resultsContainer    = $('#rls-results-content');
+    const spinner             = $('.rls-scan-progress-area .spinner');
+
+    // Переменные состояния
     let totalFiles = 0;
     let processedFiles = 0;
     let foundThreats = [];
     let snapshotData = {}; 
     let comparisonChanges = { added: [], modified: [], deleted: [] };
     
-    let isWorking = false; // Флаг, идет ли процесс
-    let currentProcess = null; // 'malware', 'snapshot', 'compare'
+    let isWorking = false; 
+    let currentProcess = null; 
+    let retryCount = 0;
 
-    // --- 3. Логика вкладок (Tabs) ---
+    // --- TABS (Вкладки) ---
     $('.nav-tab-wrapper .nav-tab').on('click', function(e) {
-        e.preventDefault(); 
+        e.preventDefault();
         
-        // Если идет сканирование, не даем переключать
-        if (isWorking) return;
+        if (isWorking) {
+            alert('Пожалуйста, дождитесь завершения текущего процесса.');
+            return;
+        }
 
-        // Управление классами
+        // Переключение классов
         $('.nav-tab-wrapper .nav-tab').removeClass('nav-tab-active');
         $(this).addClass('nav-tab-active');
-
-        // Переключение панелей
+        
+        // Переключение видимости блоков
         const targetTab = $(this).data('tab');
         $('.rls-tab-panel').hide();
         $('#' + targetTab).show();
 
-        // Очистка результатов при смене вкладки
-        resultsContainer.html('<p>Здесь появятся результаты после завершения сканирования.</p>');
+        // Если перешли не на историю и не на карантин, очищаем результаты (визуально)
+        if (targetTab !== 'scan-history' && targetTab !== 'quarantine') {
+             resultsContainer.html('<div class="rls-empty-state" style="text-align:center; padding:40px 20px; color:#a0a5aa;"><span class="dashicons dashicons-search" style="font-size:40px; width:40px; height:40px; margin-bottom:10px;"></span><p>Нажмите кнопку запуска, чтобы увидеть результаты здесь.</p></div>');
+             progressBarArea.hide();
+        }
     });
 
-    // --- 4. Обработчики кнопок запуска ---
-    
-    // Запуск сканера вирусов
+    // --- ОБРАБОТЧИКИ КНОПОК ---
     startScanBtn.on('click', function() { 
-        if (!isWorking) { 
-            currentProcess = 'malware'; 
-            startFileDiscovery(); 
-        } 
+        if (!isWorking) { currentProcess = 'malware'; startProcess(); } 
     });
 
-    // Создание снимка
     createSnapshotBtn.on('click', function() { 
-        if (!isWorking) { 
-            currentProcess = 'snapshot'; 
-            startFileDiscovery(); 
-        } 
+        if (!isWorking) { currentProcess = 'snapshot'; startProcess(); } 
     });
 
-    // Сравнение со снимком
     compareSnapshotBtn.on('click', function() { 
-        if (!isWorking) { 
-            currentProcess = 'compare'; 
-            startFileDiscovery(); 
-        } 
+        if (!isWorking) { currentProcess = 'compare'; startProcess(); } 
     });
 
-    // --- 5. ФАЗА 1: ПОИСК ФАЙЛОВ (Discovery) ---
-    function startFileDiscovery() { 
+    // --- ЛОГИКА ПРОЦЕССА ---
+
+    function startProcess() { 
         isWorking = true; 
+        retryCount = 0;
         updateUI('discovery_start'); 
         
-        $.post(rls_scanner_data.ajax_url, { 
-            action: 'rls_start_file_discovery', 
-            nonce: rls_scanner_data.nonce 
-        })
-        .done(function(res) { 
+        // Сброс данных
+        foundThreats = [];
+        snapshotData = {};
+        comparisonChanges = { added: [], modified: [], deleted: [] };
+        
+        ajaxCall('rls_start_file_discovery', {}, function(res) {
             if (res.success) {
-                discoverFilesStep(); 
+                // Небольшая задержка перед стартом цикла
+                setTimeout(discoverFilesStep, 500); 
             } else {
                 updateUI('error', res.data);
             }
-        })
-        .fail(function() { updateUI('error', 'Ошибка сервера при запуске поиска.'); }); 
+        });
     }
 
     function discoverFilesStep() { 
-        $.post(rls_scanner_data.ajax_url, { 
-            action: 'rls_discover_files_step', 
-            nonce: rls_scanner_data.nonce 
-        })
-        .done(function(res) { 
+        if (!isWorking) return; 
+
+        ajaxCall('rls_discover_files_step', {}, function(res) {
             if (res.success) { 
                 updateUI('discovering', res.data); 
                 
                 if (!res.data.done) { 
-                    // Продолжаем поиск
-                    discoverFilesStep(); 
+                    // Рекурсия
+                    setTimeout(discoverFilesStep, 100); 
                 } else { 
-                    // Поиск завершен, переходим к фазе 2
                     totalFiles = res.data.files_found; 
-                    startPhase2(); 
+                    setTimeout(startPhase2, 500); 
                 } 
             } else { 
                 updateUI('error', res.data); 
             } 
-        })
-        .fail(function() { updateUI('error', 'Ошибка сервера на шаге поиска.'); }); 
+        });
     }
 
-    // --- 6. ФАЗА 2: ОБРАБОТКА (Scan / Snapshot / Compare) ---
     function startPhase2() { 
         processedFiles = 0; 
         
@@ -123,175 +115,164 @@ jQuery(function($) {
             return; 
         } 
         
-        switch(currentProcess) { 
-            case 'malware': 
-                foundThreats = []; 
-                performScanStep(); 
-                break; 
-            case 'snapshot': 
-                snapshotData = {}; 
-                createSnapshotStep(); 
-                break; 
-            case 'compare': 
-                comparisonChanges = { added: [], modified: [], deleted: [] }; 
-                compareSnapshotStep(); 
-                break; 
-        } 
+        nextStep();
     }
 
-    // Шаг сканирования на вирусы
-    function performScanStep() { 
-        if (processedFiles >= totalFiles) { finalizeProcess(); return; } 
+    function nextStep() {
+        if (!isWorking) return;
+        if (processedFiles >= totalFiles) { finalizeProcess(); return; }
         
-        $.post(rls_scanner_data.ajax_url, { 
-            action: 'rls_perform_scan_step', 
-            nonce: rls_scanner_data.nonce, 
-            offset: processedFiles 
-        })
-        .done(function(res) { 
+        let action = '';
+        if(currentProcess === 'malware') action = 'rls_perform_scan_step';
+        else if(currentProcess === 'snapshot') action = 'rls_create_snapshot_step';
+        else action = 'rls_compare_snapshot_step';
+
+        ajaxCall(action, { offset: processedFiles }, function(res) {
             if (res.success) { 
-                processedFiles += res.data.scanned_count; 
-                if (res.data.found_threats.length > 0) {
+                // Обновляем прогресс
+                let count = res.data.processed_count || res.data.scanned_count || 0;
+                
+                // Защита от бесконечного цикла, если сервер вернул 0 (но файлы еще есть)
+                if (count === 0) count = 1;
+                
+                processedFiles += count; 
+                
+                // Собираем данные
+                if(currentProcess==='malware' && res.data.found_threats) {
                     foundThreats = foundThreats.concat(res.data.found_threats);
                 }
+                if(currentProcess==='snapshot' && res.data.snapshot_part) {
+                    $.extend(snapshotData, res.data.snapshot_part);
+                }
+                if(currentProcess==='compare' && res.data.changes) {
+                    if(res.data.changes.added) comparisonChanges.added = comparisonChanges.added.concat(res.data.changes.added);
+                    if(res.data.changes.modified) comparisonChanges.modified = comparisonChanges.modified.concat(res.data.changes.modified);
+                }
+                
                 updateUI('working'); 
-                performScanStep(); 
+                
+                // Следующий шаг
+                setTimeout(nextStep, 50); 
             } else { 
                 updateUI('error', res.data); 
             } 
-        })
-        .fail(function() { updateUI('error', 'Ошибка шага сканирования.'); }); 
+        });
     }
 
-    // Шаг создания снимка
-    function createSnapshotStep() { 
-        if (processedFiles >= totalFiles) { finalizeProcess(); return; } 
-        
-        $.post(rls_scanner_data.ajax_url, { 
-            action: 'rls_create_snapshot_step', 
-            nonce: rls_scanner_data.nonce, 
-            offset: processedFiles 
-        })
-        .done(function(res) { 
-            if (res.success) { 
-                processedFiles += res.data.processed_count; 
-                $.extend(snapshotData, res.data.snapshot_part); 
-                updateUI('working'); 
-                createSnapshotStep(); 
-            } else { 
-                updateUI('error', res.data); 
-            } 
-        })
-        .fail(function() { updateUI('error', 'Ошибка шага создания снимка.'); }); 
-    }
-
-    // Шаг сравнения
-    function compareSnapshotStep() { 
-        if (processedFiles >= totalFiles) { finalizeProcess(); return; } 
-        
-        $.post(rls_scanner_data.ajax_url, { 
-            action: 'rls_compare_snapshot_step', 
-            nonce: rls_scanner_data.nonce, 
-            offset: processedFiles 
-        })
-        .done(function(res) { 
-            if (res.success) { 
-                processedFiles += res.data.processed_count; 
-                if(res.data.changes.added.length > 0) comparisonChanges.added = comparisonChanges.added.concat(res.data.changes.added); 
-                if(res.data.changes.modified.length > 0) comparisonChanges.modified = comparisonChanges.modified.concat(res.data.changes.modified); 
-                updateUI('working'); 
-                compareSnapshotStep(); 
-            } else { 
-                updateUI('error', res.data); 
-            } 
-        })
-        .fail(function() { updateUI('error', 'Ошибка шага сравнения.'); }); 
-    }
-
-    // --- 7. ЗАВЕРШЕНИЕ И ВЫВОД РЕЗУЛЬТАТОВ ---
     function finalizeProcess() { 
-        let finalAction, finalData = {}; 
+        let action = '', data = {}; 
         
-        switch(currentProcess) { 
-            case 'malware': 
-                finalAction = 'rls_finalize_scan'; 
-                finalData = { threats: JSON.stringify(foundThreats) }; 
-                break; 
-            case 'snapshot': 
-                finalAction = 'rls_finalize_snapshot'; 
-                finalData = { snapshot: JSON.stringify(snapshotData) }; 
-                break; 
-            case 'compare': 
-                finalAction = 'rls_finalize_comparison'; 
-                finalData = { changes: JSON.stringify(comparisonChanges) }; 
-                break; 
-        } 
+        if(currentProcess === 'malware') { 
+            action = 'rls_finalize_scan'; 
+            data.threats = JSON.stringify(foundThreats); 
+        }
+        else if(currentProcess === 'snapshot') { 
+            action = 'rls_finalize_snapshot'; 
+            data.snapshot = JSON.stringify(snapshotData); 
+        }
+        else { 
+            action = 'rls_finalize_comparison'; 
+            data.changes = JSON.stringify(comparisonChanges); 
+        }
         
-        finalData.action = finalAction; 
-        finalData.nonce = rls_scanner_data.nonce; 
-        
-        $.post(rls_scanner_data.ajax_url, finalData)
-        .done(function(res) { 
+        ajaxCall(action, data, function(res) {
             if (res.success) {
                 updateUI('finish', res.data); 
             } else {
                 updateUI('error', res.data);
             }
-        })
-        .fail(function() { updateUI('error', 'Ошибка при завершении.'); }); 
+        });
     }
 
-    // --- 8. ОБНОВЛЕНИЕ UI ---
-    function updateUI(state, data = {}) { 
-        let percentage = 0; 
+    // --- HELPER: AJAX WITH RETRY ---
+    function ajaxCall(action, data, successCallback) {
+        data.action = action;
+        data.nonce = rls_scanner_data.nonce;
         
-        // Блокируем кнопки во время работы
+        $.ajax({
+            url: rls_scanner_data.ajax_url,
+            type: 'POST',
+            data: data,
+            timeout: 120000, // 2 минуты тайм-аут (достаточно для большинства хостингов)
+            success: function(response) {
+                retryCount = 0; // Сброс счетчика ошибок при успехе
+                successCallback(response);
+            },
+            error: function(xhr, status, error) {
+                if (status === 'abort') return; // Игнорируем ручную отмену
+                
+                // Если ошибка сети или тайм-аут - пробуем снова
+                if (retryCount < 5) { 
+                    retryCount++;
+                    statusText.text(`Сбой сети. Повтор ${retryCount}/5...`);
+                    
+                    setTimeout(function() { 
+                        ajaxCall(action, data, successCallback); 
+                    }, 3000);
+                } else {
+                    updateUI('error', `Сервер не отвечает (${status}). Попробуйте позже.`);
+                }
+            }
+        });
+    }
+
+    // --- UI UPDATER ---
+    function updateUI(state, data = {}) { 
         $('.rls-scan-controls button').prop('disabled', true); 
+        progressBarArea.show();
         spinner.css('visibility', 'visible'); 
         
         switch(state) { 
             case 'discovery_start': 
-                progressBarContainer.show(); 
-                progressBar.css('width', '0%').text('0%'); 
-                statusText.text('Фаза 1: Поиск файлов...'); 
-                resultsContainer.html('<p>Процесс запущен, собираем список файлов для анализа...</p>'); 
+                progressBar.css('width', '0%').text(''); 
+                statusTitle.text('Индексация файлов...');
+                statusText.text('Подготовка...'); 
+                resultsContainer.html('<div class="rls-empty-state" style="text-align:center; padding:40px 20px; color:#a0a5aa;"><span class="spinner is-active" style="float:none;"></span><p>Составляем список файлов...</p></div>'); 
                 break; 
             
             case 'discovering': 
-                // Эвристический прогресс для поиска
-                percentage = Math.min(10, Math.round((data.files_found / (data.files_found + data.dirs_left * 10)) * 10)); 
-                progressBar.css('width', percentage + '%').text(percentage + '%'); 
-                statusText.text(`Поиск... Найдено: ${data.files_found}. Директория: ${data.last_dir}`); 
+                let est = data.files_found + (data.dirs_left * 10);
+                // Показываем до 15% прогресса на этапе поиска
+                let pct = Math.min(15, Math.round((data.files_found / (est || 1)) * 15)); 
+                progressBar.css('width', pct + '%').text(''); 
+                statusText.text(`Найдено: ${data.files_found} файлов`); 
                 break; 
             
             case 'working': 
-                // Реальный прогресс обработки
+                // Прогресс от 15% до 99%
+                let wpct = 0;
                 if (totalFiles > 0) {
-                    percentage = Math.min(100, 10 + Math.round((processedFiles / totalFiles) * 90)); 
+                    wpct = 15 + Math.round((processedFiles / totalFiles) * 85);
                 } else {
-                    percentage = 100;
+                    wpct = 100;
                 }
-                progressBar.css('width', percentage + '%').text(percentage + '%'); 
+                wpct = Math.min(99, wpct); // Не показываем 100% пока не финализируем
                 
-                let actionText = '';
-                if (currentProcess === 'malware') actionText = 'Сканирование...';
-                else if (currentProcess === 'snapshot') actionText = 'Создание снимка...';
-                else actionText = 'Сравнение...';
+                progressBar.css('width', wpct + '%').text(wpct + '%'); 
                 
-                statusText.text(`Фаза 2: ${actionText} (${processedFiles} / ${totalFiles})`); 
+                let actionName = 'Обработка';
+                if (currentProcess === 'malware') actionName = 'Поиск вирусов';
+                if (currentProcess === 'snapshot') actionName = 'Создание снимка';
+                if (currentProcess === 'compare') actionName = 'Сравнение';
+                
+                statusTitle.text(actionName + '...');
+                statusText.text(`${processedFiles} / ${totalFiles}`); 
                 break; 
             
             case 'finish': 
                 isWorking = false; 
                 $('.rls-scan-controls button').prop('disabled', false); 
                 
-                // Обновляем состояние кнопки "Сравнить"
-                rls_scanner_data.snapshot_exists = (currentProcess === 'snapshot' || rls_scanner_data.snapshot_exists); 
+                if (currentProcess === 'snapshot') {
+                    rls_scanner_data.snapshot_exists = true;
+                }
                 compareSnapshotBtn.prop('disabled', !rls_scanner_data.snapshot_exists); 
                 
                 spinner.css('visibility', 'hidden'); 
-                progressBar.css('width', '100%').text('Завершено'); 
-                statusText.text('Процесс успешно завершен.'); 
+                progressBar.css('width', '100%').text('100%'); 
+                statusTitle.text('Завершено успешно');
+                statusText.text('Готово'); 
+                
                 displayResults(data); 
                 break; 
             
@@ -299,81 +280,97 @@ jQuery(function($) {
                 isWorking = false; 
                 $('.rls-scan-controls button').prop('disabled', false); 
                 compareSnapshotBtn.prop('disabled', !rls_scanner_data.snapshot_exists); 
+                
                 spinner.css('visibility', 'hidden'); 
-                progressBarContainer.hide(); 
-                statusText.html(`<strong style="color:red;">Ошибка:</strong> ${data}`); 
+                progressBar.css('background-color', '#d63638');
+                statusTitle.html(`<span style="color:#d63638;">Ошибка!</span>`); 
+                statusText.text('Остановлено');
+                resultsContainer.html(`<div class="rls-alert-danger" style="padding:10px; background:#fbeaea; border-left:4px solid #dc3545; color:#d63638;"><p><strong>Произошла ошибка:</strong> ${data}</p><p>Попробуйте обновить страницу и запустить снова.</p></div>`);
                 break; 
         } 
     }
-    
-    // Вспомогательная функция экранирования
-    function escapeHtml(text) { 
-        if(typeof text !== 'string') return ''; 
-        return $('<div>').text(text).html(); 
-    }
 
-    // Вывод таблицы результатов
     function displayResults(msg) {
         let html = '';
+        
         if (currentProcess === 'malware') {
             if (foundThreats.length === 0) { 
-                html = '<p class="rls-results-clean" style="color:green; font-size:1.2em;"><strong><span class="dashicons dashicons-yes-alt"></span> Подозрительных файлов не найдено! Ваш сайт чист.</strong></p>'; 
+                html = '<div class="rls-results-clean" style="padding:20px; background:#e7f7e8; border:1px solid #c3e6cb; border-radius:5px; color:#155724; text-align:center;"><span class="dashicons dashicons-yes-alt" style="font-size:40px; width:40px; height:40px; color:#46b450; display:block; margin:0 auto 10px;"></span> <strong>Чисто!</strong><br>Вредоносного кода не найдено.</div>'; 
             } else {
-                html = `<p><strong>Обнаружено угроз: ${foundThreats.length}</strong></p>
-                <table class="wp-list-table widefat striped">
-                    <thead>
-                        <tr>
-                            <th style="width:50%;">Файл</th>
-                            <th style="width:25%;">Обнаруженная сигнатура</th>
-                            <th style="width:15%;">Статус</th>
-                            <th style="width:10%;">Действие</th>
-                        </tr>
-                    </thead>
-                    <tbody>`;
+                html = `<div class="rls-alert-danger" style="padding:10px; background:#fbeaea; border-left:4px solid #dc3545; margin-bottom:15px;"><strong style="color:#d63638;">Найдено угроз: ${foundThreats.length}</strong></div>
+                        <table class="wp-list-table widefat striped rls-scan-table">
+                            <thead><tr><th>Файл</th><th>Сигнатура</th><th>Действие</th></tr></thead>
+                            <tbody>`;
                 
-                foundThreats.forEach(threat => { 
-                    const fileHtml = escapeHtml(threat.file); 
-                    const sigHtml = escapeHtml(threat.signature); 
-                    html += `
-                    <tr data-filepath="${fileHtml}" data-signature="${sigHtml}">
-                        <td class="filepath"><code>${fileHtml}</code></td>
-                        <td><code>${sigHtml}</code></td>
-                        <td class="status-cell" style="color: red; font-weight: bold;">Подозрительный</td>
-                        <td class="action-cell"><button class="button-secondary rls-neutralize-button">Обезвредить (AI)</button></td>
-                    </tr>`; 
+                foundThreats.forEach(t => { 
+                    html += `<tr data-f="${esc(t.file)}" data-s="${esc(t.signature)}">
+                                <td class="filepath"><code>${esc(t.file)}</code></td>
+                                <td><span class="rls-badge red" style="background:#dc3545; color:#fff; padding:3px 8px; border-radius:4px; font-weight:bold; font-size:11px;">ВИРУС</span> <span style="font-size:11px; color:#666;">${esc(t.signature)}</span></td>
+                                <td class="action-cell">
+                                    <button class="button button-small rls-neutralize-button">AI Анализ</button>
+                                    <button class="button button-small rls-quarantine-button" style="color:#d63638; border-color:#d63638; margin-left:5px;">В Карантин</button>
+                                </td>
+                             </tr>`; 
                 });
                 html += '</tbody></table>';
             }
+            
         } else if (currentProcess === 'snapshot') {
-            html = `<p class="rls-results-clean"><strong>Снимок успешно создан/обновлен.</strong> Найдено ${totalFiles} файлов.</p>`;
+            html = `<div class="rls-results-clean" style="padding:20px; background:#e7f7e8; border:1px solid #c3e6cb; border-radius:5px; color:#155724; text-align:center;"><span class="dashicons dashicons-camera" style="font-size:40px; width:40px; height:40px; color:#46b450; display:block; margin:0 auto 10px;"></span> <strong>Снимок успешно создан!</strong><br>Проиндексировано файлов: ${totalFiles}</div>`;
+            
         } else if (currentProcess === 'compare') {
-            const { added, modified, deleted } = comparisonChanges; 
-            const allChanges = (added?.length || 0) + (modified?.length || 0) + (deleted?.length || 0);
+            const allChanges = (comparisonChanges.added?.length || 0) + (comparisonChanges.modified?.length || 0) + (comparisonChanges.deleted?.length || 0);
             
             if (allChanges === 0) { 
-                html = '<p class="rls-results-clean"><strong>Изменений не найдено. Файлы соответствуют снимку.</strong></p>'; 
+                html = `<div class="rls-results-clean" style="padding:20px; background:#e7f7e8; border:1px solid #c3e6cb; border-radius:5px; color:#155724; text-align:center;"><span class="dashicons dashicons-yes-alt" style="font-size:40px; width:40px; height:40px; color:#46b450; display:block; margin:0 auto 10px;"></span> <strong>Файлы не изменялись.</strong><br>Система соответствует эталонному снимку.</div>`; 
             } else {
-                html = `<p><strong>Обнаружено изменений: ${allChanges}</strong></p><ul>`;
-                (added || []).forEach(f => html += `<li class="added" style="color:green;"><span class="dashicons dashicons-plus"></span> Добавлен: ${escapeHtml(f)}</li>`);
-                (modified || []).forEach(f => html += `<li class="modified" style="color:orange;"><span class="dashicons dashicons-edit"></span> Изменен: ${escapeHtml(f)}</li>`);
-                (deleted || []).forEach(f => html += `<li class="deleted" style="color:red; text-decoration:line-through;"><span class="dashicons dashicons-trash"></span> Удален: ${escapeHtml(f)}</li>`);
-                html += '</ul>';
+                html = `<div class="rls-alert-warning" style="padding:10px; background:#fff8e5; border-left:4px solid #ffba00; margin-bottom:15px;"><strong>Обнаружено изменений: ${allChanges}</strong></div>
+                        <table class="wp-list-table widefat striped rls-scan-table">
+                            <thead><tr><th>Тип</th><th>Файл</th><th>Действие</th></tr></thead>
+                            <tbody>`;
+                
+                (comparisonChanges.modified || []).forEach(f => {
+                    html += `<tr data-f="${esc(f)}" data-s="">
+                                <td><span class="rls-badge orange" style="background:#f0ad4e; color:#fff; padding:3px 8px; border-radius:4px; font-weight:bold; font-size:11px;">ИЗМЕНЕН</span></td>
+                                <td class="filepath"><code>${esc(f)}</code></td>
+                                <td>
+                                    <button class="button button-small rls-neutralize-button">Проверить (AI)</button>
+                                    <button class="button button-small rls-quarantine-button" style="color:#d63638; border-color:#d63638; margin-left:5px;">В Карантин</button>
+                                </td>
+                             </tr>`;
+                });
+                (comparisonChanges.added || []).forEach(f => {
+                    html += `<tr data-f="${esc(f)}" data-s="">
+                                <td><span class="rls-badge green" style="background:#46b450; color:#fff; padding:3px 8px; border-radius:4px; font-weight:bold; font-size:11px;">НОВЫЙ</span></td>
+                                <td class="filepath"><code>${esc(f)}</code></td>
+                                <td>
+                                    <button class="button button-small rls-neutralize-button">Проверить (AI)</button>
+                                    <button class="button button-small rls-quarantine-button" style="color:#d63638; border-color:#d63638; margin-left:5px;">В Карантин</button>
+                                </td>
+                             </tr>`;
+                });
+                (comparisonChanges.deleted || []).forEach(f => {
+                    html += `<tr>
+                                <td><span class="rls-badge red" style="background:#dc3545; color:#fff; padding:3px 8px; border-radius:4px; font-weight:bold; font-size:11px;">УДАЛЕН</span></td>
+                                <td class="filepath" colspan="2"><code>${esc(f)}</code></td>
+                             </tr>`;
+                });
+                html += '</tbody></table>';
             }
         }
+        
         resultsContainer.html(html);
     }
 
-    // --- 9. КНОПКА "ОБЕЗВРЕДИТЬ (AI)" ---
+    // --- AI ANALYSIS BUTTON HANDLER ---
     resultsContainer.on('click', '.rls-neutralize-button', function() {
         const button = $(this);
         const row = button.closest('tr');
-        const filepath = row.data('filepath');
-        const signature = row.data('signature');
-        const statusCell = row.find('.status-cell');
+        const filepath = row.data('f');
+        const signature = row.data('s');
         
-        button.prop('disabled', true);
-        statusCell.html('<span class="spinner is-active" style="float:none; vertical-align:middle; visibility:visible;"></span> Проверка AI...');
-
+        button.prop('disabled', true).html('<span class="spinner is-active" style="float:none; margin:0;"></span>');
+        
         $.post(rls_scanner_data.ajax_url, { 
             action: 'rls_neutralize_file', 
             nonce: rls_scanner_data.nonce, 
@@ -382,36 +379,102 @@ jQuery(function($) {
         })
         .done(function(res) {
             if (res.success) {
-                switch(res.data.result) {
-                    case 'whitelisted':
-                        row.addClass('is-clean').css('background-color', '#e7f7e8');
-                        statusCell.html('<span class="status-whitelisted" style="color:green;">Файл ядра (ОК)</span>');
-                        button.remove();
-                        break;
-                    case 'ai_legitimate':
-                        row.addClass('is-clean').css('background-color', '#e7f7e8');
-                        statusCell.html('<span class="status-ai-legitimate" style="color:blue;">Безопасен (AI)</span>');
-                        button.remove();
-                        break;
-                    case 'ai_virus':
-                        row.addClass('is-danger').css('background-color', '#fbeaea');
-                        statusCell.html('<span class="status-ai-virus" style="color:red;">Вирус (AI)</span>');
-                        button.remove();
-                        // Добавляем строку с кодом вируса
-                        if (res.data.snippet) {
-                            row.after(`<tr><td colspan="4"><div class="virus-snippet" style="background:#fff8e5; padding:10px; font-family:monospace; white-space:pre-wrap;">${escapeHtml(res.data.snippet)}</div></td></tr>`);
-                        }
-                        break;
+                if (res.data.result === 'whitelisted') {
+                    row.css('background-color', '#f0f6fc');
+                    button.replaceWith('<span style="color:green; font-weight:bold;"><span class="dashicons dashicons-shield"></span> Ядро WP (ОК)</span>');
+                } else if (res.data.result === 'ai_legitimate') {
+                    row.css('background-color', '#f0f6fc');
+                    button.replaceWith('<span style="color:blue; font-weight:bold;"><span class="dashicons dashicons-yes"></span> Безопасен (AI)</span>');
+                } else if (res.data.result === 'ai_virus') {
+                    row.css('background-color', '#ffe6e6');
+                    button.parent().html('<span style="color:red; font-weight:bold;">⚠️ ВИРУС (AI)</span>');
+                    
+                    if (res.data.snippet) {
+                        row.after(`<tr><td colspan="3"><div class="rls-virus-snippet" style="background:#2c3338; color:#f0f0f1; padding:15px; border-radius:5px; margin-top:10px; font-size:11px; overflow-x:auto;"><strong>Фрагмент кода:</strong><pre>${esc(res.data.snippet)}</pre></div></td></tr>`);
+                    }
+                } else if (res.data.result === 'too_large') {
+                    button.replaceWith('<span style="color:#666; font-size:12px;">Файл слишком велик (>100KB)</span>');
                 }
             } else {
-                statusCell.html(`<span style="color:red;">Ошибка</span>`);
-                alert('Ошибка: ' + (res.data || 'Неизвестная ошибка.'));
-                button.prop('disabled', false);
+                alert('Ошибка: ' + res.data);
+                button.prop('disabled', false).text('Повторить');
             }
         })
         .fail(function() {
-            statusCell.html(`<span style="color:red;">Сбой сети</span>`);
-            button.prop('disabled', false);
+            alert('Ошибка сети.');
+            button.prop('disabled', false).text('Повторить');
         });
     });
+
+    // --- QUARANTINE BUTTON HANDLER ---
+    resultsContainer.on('click', '.rls-quarantine-button', function() {
+        const button = $(this);
+        const row = button.closest('tr');
+        const filepath = row.data('f');
+        
+        if(!confirm('Переместить файл в карантин? Он будет удален из текущей папки и перестанет работать.')) return;
+
+        button.prop('disabled', true).text('Moving...');
+
+        $.post(rls_scanner_data.ajax_url, {
+            action: 'rls_quarantine_file',
+            nonce: rls_scanner_data.nonce,
+            filepath: filepath
+        }, function(response) {
+            if (response.success) {
+                row.fadeOut().remove();
+                // Можно добавить уведомление
+            } else {
+                alert('Error: ' + response.data);
+                button.prop('disabled', false).text('В Карантин');
+            }
+        });
+    });
+
+    // --- QUARANTINE RESTORE / DELETE (HANDLERS FOR TAB) ---
+    // Эти кнопки находятся во вкладке Карантин
+    $('.rls-restore-btn').click(function() {
+        var btn = $(this);
+        var id = btn.data('id');
+        btn.prop('disabled', true);
+        
+        $.post(rls_scanner_data.ajax_url, { 
+            action: 'rls_restore_file', 
+            nonce: rls_scanner_data.nonce, 
+            id: id 
+        }, function(res) {
+            if(res.success) { 
+                alert(res.data.message); 
+                $('#q-row-'+id).fadeOut(); 
+            } else { 
+                alert(res.data); 
+                btn.prop('disabled', false);
+            }
+        });
+    });
+
+    $('.rls-delete-q-btn').click(function() {
+        if(!confirm('Удалить файл безвозвратно?')) return;
+        var btn = $(this);
+        var id = btn.data('id');
+        btn.prop('disabled', true);
+        
+        $.post(rls_scanner_data.ajax_url, { 
+            action: 'rls_delete_quarantine', 
+            nonce: rls_scanner_data.nonce, 
+            id: id 
+        }, function(res) {
+            if(res.success) { 
+                $('#q-row-'+id).fadeOut(); 
+            } else {
+                alert(res.data);
+                btn.prop('disabled', false);
+            }
+        });
+    });
+
+    function esc(text) { 
+        if(typeof text !== 'string') return ''; 
+        return $('<div>').text(text).html(); 
+    }
 });

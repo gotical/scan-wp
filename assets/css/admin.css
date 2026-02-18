@@ -1,19 +1,198 @@
-/**
- * CSS стили для административных страниц плагина Rybinsk Lab Security.
- */
-.rls-wrap .rls-container{display:flex;flex-wrap:wrap;gap:20px}.rls-wrap .rls-main-content{flex:1;min-width:400px}.rls-wrap .rls-sidebar{width:280px;flex-shrink:0}.rls-box{background:#fff;border:1px solid #ccd0d4;padding:20px;border-radius:4px;margin-bottom:20px}.rls-box h2{margin-top:0;padding-bottom:10px;border-bottom:1px solid #eee}.license-status .status-valid{color:#28a745;font-weight:700}.license-status .status-invalid{color:#dc3545;font-weight:700}.license-status .status-inactive{color:#6c757d;font-weight:700}.author-box a.button-primary{display:block;text-align:center;margin-top:10px}
-/* --- Стили для Сканера и Вкладок --- */
-.rls-tab-panel{padding:20px 0 0;display:none}.rls-tab-panel.active{display:block}.snapshot-info{margin-bottom:15px;color:#555}.rls-scan-controls{display:flex;gap:10px;align-items:center}.rls-scan-progress-area{display:flex;align-items:center;gap:10px;margin-top:20px}.rls-scan-progress-area .spinner{visibility:hidden;margin:0}#rls-scan-progress-container{flex-grow:1;background-color:#e9ecef;border-radius:4px;overflow:hidden}#rls-scan-progress-bar{width:0;height:25px;background-color:#007bff;text-align:center;line-height:25px;color:#fff;transition:width .4s ease;font-weight:700}#rls-scan-status{margin-top:10px;font-style:italic;color:#555;min-height:20px;word-break:break-all}
-/* --- Стили для Таблицы Результатов --- */
-#rls-scan-results .results-title{margin-top:0}
-#rls-scan-results .wp-list-table {margin-top: 15px;}
-#rls-scan-results .wp-list-table code {word-break: break-all;}
-#rls-scan-results .status-cell .spinner {float: none; vertical-align: middle; margin-right: 5px;}
-#rls-scan-results tr.is-clean {background-color: #e7f7e8 !important;}
-#rls-scan-results tr.is-danger {background-color: #fbeaea !important;}
-#rls-scan-results .status-whitelisted {color: #28a745; font-weight: bold;}
-#rls-scan-results .status-ai-legitimate {color: #1a73e8; font-weight: bold;}
-#rls-scan-results .status-ai-virus {color: #dc3545; font-weight: bold;}
-#rls-scan-results .virus-snippet {margin-top: 10px; background: #fff8e5; border: 1px solid #ffc107; padding: 10px; border-radius: 4px; white-space: pre-wrap; font-family: monospace; font-size: 12px;}
-/* Стили для результатов сканера изменений */
-#rls-results-content ul{list-style-type:none;padding-left:0;max-height:400px;overflow-y:auto;border:1px solid #ddd}#rls-results-content li{padding:10px;border-bottom:1px solid #f0f0f1;word-break:break-all;display:flex;gap:10px;align-items:center}#rls-results-content li.added{color:#28a745}#rls-results-content li.modified{color:#fd7e14}#rls-results-content li.deleted{color:#dc3545;text-decoration:line-through}#rls-results-content li:nth-child(odd){background-color:#f8f9fa}.rls-results-clean{color:#28a745;font-size:1.2em}
+.rls-wrap .rls-container { display:flex; flex-wrap:wrap; gap:20px; }
+.rls-box { background:#fff; border:1px solid #c3c4c7; padding:20px; border-radius:4px; margin-bottom:20px; box-shadow: 0 1px 1px rgba(0,0,0,.04); }
+.rls-box h2 { margin-top:0; padding-bottom:10px; border-bottom:1px solid #f0f0f1; font-size: 1.3em; }
+
+.rls-nav-tabs { margin-bottom: 15px !important; }
+.rls-tab-content { display: none; }
+.rls-tab-content.active { display: block; }
+
+.rls-ip-input-group { display: flex; gap: 5px; margin-bottom: 15px; }
+.rls-ip-input-group input { flex-grow: 1; }
+.rls-ip-list { border: 1px solid #dcdcde; background: #fff; border-radius: 4px; max-height: 250px; overflow-y: auto; margin: 0; padding: 0; list-style: none; }
+.rls-ip-list li { padding: 8px 12px; border-bottom: 1px solid #f0f0f1; display: flex; justify-content: space-between; align-items: center; font-family: monospace; font-size: 13px; margin:0; }
+.rls-ip-list li:last-child { border-bottom: none; }
+.rls-ip-list li:nth-child(even) { background-color: #fafafa; }
+.rls-del-ip { color: #dc3545; text-decoration: none; font-weight: bold; font-size: 20px; line-height: 1; padding: 0 5px; }
+.rls-del-ip:hover { color: #a71d2a; }
+
+.rls-badge-log { padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; color: #fff; text-transform: uppercase; }
+.rls-badge-log.red { background: #d63638; }
+.rls-badge-log.orange { background: #f0ad4e; }
+.rls-badge-log.gray { background: #646970; }
+
+.rls-scan-controls { display:flex; gap:10px; align-items:center; margin-top: 15px; }
+.rls-scan-progress-area { margin-top:20px; display: none; }
+#rls-scan-progress-container { background-color:#e9ecef; border-radius:4px; overflow:hidden; height: 20px; width: 100%; margin-top: 5px; }
+#rls-scan-progress-bar { width:0; height:100%; background-color:#2271b1; text-align:center; line-height:20px; color:#fff; font-size: 11px; transition:width .4s ease; }
+#rls-scan-status { margin-top: 5px; font-style: italic; color: #646970; }
+.status-cell .spinner { float: none; vertical-align: middle; margin-right: 5px; }
+#rls-scan-results tr.is-clean { background-color: #e7f7e8 !important; }
+#rls-scan-results tr.is-danger { background-color: #fbeaea !important; }
+/* --- СТИЛИ ДЛЯ МОДАЛЬНОГО ОКНА ДЕАКТИВАЦИИ --- */
+.rls-modal-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.6); z-index: 99999;
+}
+.rls-modal-content {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 500px; max-width: 90%; background: #fff; padding: 30px;
+    border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); z-index: 100000;
+}
+.rls-modal-header { display: flex; align-items: center; gap: 15px; margin-bottom: 20px; }
+.rls-modal-header h2 { margin: 0; font-size: 22px; color: #1d2327; }
+
+.rls-options { margin: 20px 0; display: flex; flex-direction: column; gap: 15px; }
+.rls-opt {
+    display: flex; gap: 10px; padding: 15px; border: 1px solid #ddd;
+    border-radius: 6px; cursor: pointer; transition: 0.2s;
+}
+.rls-opt:hover { border-color: #2271b1; background: #f0f6fc; }
+.rls-opt input { margin-top: 4px; }
+.rls-opt strong { display: block; margin-bottom: 4px; font-size: 14px; }
+.rls-opt .desc { font-size: 12px; color: #646970; line-height: 1.4; display: block; }
+.rls-opt.warning:hover { border-color: #d63638; background: #fff8e5; }
+
+.rls-offer-box {
+    background: #f6f7f7; border: 1px dashed #2271b1; padding: 15px;
+    border-radius: 6px; margin: 20px 0; text-align: center;
+}
+.rls-tg-btn { display: inline-flex !important; align-items: center; gap: 5px; margin-top: 10px !important; }
+
+.rls-modal-footer {
+    margin-top: 25px; padding-top: 20px; border-top: 1px solid #f0f0f1;
+    display: flex; justify-content: space-between; align-items: center;
+}
+
+/* --- ОСТАЛЬНЫЕ СТИЛИ (БЕЗ ИЗМЕНЕНИЙ) --- */
+.rls-wrap .rls-container { display:flex; flex-wrap:wrap; gap:20px; }
+.rls-box { background:#fff; border:1px solid #c3c4c7; padding:20px; border-radius:4px; margin-bottom:20px; box-shadow: 0 1px 1px rgba(0,0,0,.04); }
+.rls-box h2 { margin-top:0; padding-bottom:10px; border-bottom:1px solid #f0f0f1; font-size: 1.3em; }
+.rls-nav-tabs { margin-bottom: 15px !important; }
+.rls-tab-content { display: none; }
+.rls-tab-content.active { display: block; }
+.rls-ip-input-group { display: flex; gap: 5px; margin-bottom: 15px; }
+.rls-ip-input-group input { flex-grow: 1; }
+.rls-ip-list { border: 1px solid #dcdcde; background: #fff; border-radius: 4px; max-height: 250px; overflow-y: auto; margin: 0; padding: 0; list-style: none; }
+.rls-ip-list li { padding: 8px 12px; border-bottom: 1px solid #f0f0f1; display: flex; justify-content: space-between; align-items: center; font-family: monospace; font-size: 13px; margin:0; }
+.rls-del-ip { color: #dc3545; text-decoration: none; font-weight: bold; font-size: 20px; line-height: 1; padding: 0 5px; }
+.rls-badge-log { padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; color: #fff; text-transform: uppercase; }
+.rls-badge-log.red { background: #d63638; }
+.rls-badge-log.orange { background: #f0ad4e; }
+.rls-badge-log.gray { background: #646970; }
+.rls-scan-controls { display:flex; gap:10px; align-items:center; margin-top: 15px; }
+.rls-scan-progress-area { margin-top:20px; display: none; }
+#rls-scan-progress-container { background-color:#e9ecef; border-radius:4px; overflow:hidden; height: 20px; width: 100%; margin-top: 5px; }
+#rls-scan-progress-bar { width:0; height:100%; background-color:#2271b1; text-align:center; line-height:20px; color:#fff; font-size: 11px; transition:width .4s ease; }
+#rls-scan-status { margin-top: 5px; font-style: italic; color: #646970; }
+.status-cell .spinner { float: none; vertical-align: middle; margin-right: 5px; }
+#rls-scan-results tr.is-clean { background-color: #e7f7e8 !important; }
+#rls-scan-results tr.is-danger { background-color: #fbeaea !important; }
+/* --- СТИЛИ ДЛЯ СКАНЕРА (FIXED LAYOUT) --- */
+
+/* Контейнер заголовка и кнопок */
+.rls-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 20px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #f0f0f1;
+    margin-bottom: 20px;
+}
+
+/* Левая часть (Текст) */
+.rls-header-desc {
+    flex: 1;
+}
+.rls-header-desc h3 {
+    margin-top: 0;
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Правая часть (Кнопки) */
+.rls-header-actions {
+    display: flex;
+    flex-direction: column; /* Кнопки друг под другом для аккуратности */
+    gap: 10px;
+    min-width: 200px;
+    align-items: stretch; /* Растянуть кнопки на всю ширину колонки */
+}
+
+/* Кнопки */
+.rls-header-actions .button {
+    text-align: center;
+    justify-content: center;
+    height: 40px !important;
+    font-size: 14px !important;
+    display: flex;
+    align-items: center;
+}
+
+/* Статус снимка */
+.rls-snapshot-status {
+    margin-top: 15px;
+    padding: 10px 15px;
+    border-radius: 4px;
+    font-size: 13px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+.rls-snapshot-status.exists {
+    background: #f0f6fc;
+    border-left: 4px solid #2271b1;
+    color: #1d2327;
+}
+.rls-snapshot-status.empty {
+    background: #fff8e5;
+    border-left: 4px solid #f0ad4e;
+    color: #996800;
+}
+
+/* Адаптив для мобильных */
+@media (max-width: 782px) {
+    .rls-header-row {
+        flex-direction: column;
+    }
+    .rls-header-actions {
+        width: 100%;
+        flex-direction: row; /* На мобильном в ряд */
+        flex-wrap: wrap;
+    }
+    .rls-header-actions .button {
+        flex: 1;
+    }
+}
+
+/* --- ОСТАЛЬНЫЕ СТИЛИ --- */
+.rls-wrap .rls-container { display:flex; flex-wrap:wrap; gap:20px; }
+.rls-main-content { flex: 1; min-width: 300px; }
+.rls-sidebar { width: 280px; flex-shrink: 0; }
+
+.rls-box { background:#fff; border:1px solid #c3c4c7; padding:20px; border-radius:4px; margin-bottom:20px; box-shadow: 0 1px 1px rgba(0,0,0,.04); }
+.rls-box h2 { margin-top:0; padding-bottom:10px; border-bottom:1px solid #f0f0f1; font-size: 1.3em; }
+
+.nav-tab-wrapper { margin-bottom: 0 !important; border-bottom: 1px solid #c3c4c7; }
+.rls-tab-panel { padding-top: 20px; display: none; }
+.rls-tab-panel.active { display: block; }
+
+/* Прогресс бар */
+.rls-scan-progress-area { margin-top:20px; display: none; background:#f9f9f9; padding:15px; border:1px solid #ddd; border-radius:5px; }
+#rls-scan-progress-container { background-color:#e0e0e0; border-radius:10px; overflow:hidden; height: 10px; width: 100%; margin-top: 5px; }
+#rls-scan-progress-bar { width:0; height:100%; background-color:#2271b1; transition:width 0.2s ease; }
+
+/* Пустое состояние */
+.rls-empty-state { text-align:center; padding:40px 20px; color: #a0a5aa; }
+.rls-empty-state .dashicons { font-size: 40px; width: 40px; height: 40px; margin-bottom: 10px; }
+
+/* Таблица результатов */
+.rls-scan-table td { vertical-align: middle; }
+.rls-badge { padding:3px 8px; border-radius:4px; font-size:10px; font-weight:700; color:#fff; text-transform: uppercase; }
+.rls-badge.red { background:#dc3545; }
+.rls-badge.green { background:#46b450; }
+.rls-badge.orange { background:#f0ad4e; }
+.filepath code { color: #d63638; display: block; word-break: break-all; }
+.rls-virus-snippet { background:#2c3338; color:#f0f0f1; padding:15px; border-radius:5px; margin-top:10px; font-size:11px; overflow-x:auto; }
