@@ -1,0 +1,20 @@
+# OS / editor artifacts
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs & temp
+*.log
+*.tmp
+*.bak
+/cache/
+/tmp/
+
+# Build/release artifacts
+/build/
+/release/
+/dist/
+*.zip

@@ -1,12 +1,13 @@
 /**
  * JavaScript для Сканера (Rybinsk Lab Security).
- * Версия: 1.6.0 (Complete: Scan + AI + Quarantine)
+ * Версия: 1.6.1 (Complete: Scan + AI + Quarantine + Full Scan)
  */
 
 jQuery(function($) {
     
     // Элементы UI
     const startScanBtn        = $('#rls-start-scan-button');
+    const fullScanBtn         = $('#rls-start-full-scan-button');
     const createSnapshotBtn   = $('#rls-create-snapshot-button');
     const compareSnapshotBtn  = $('#rls-compare-snapshot-button');
     const progressBarArea     = $('.rls-scan-progress-area');
@@ -25,6 +26,7 @@ jQuery(function($) {
     
     let isWorking = false; 
     let currentProcess = null; 
+    let currentScanMode = 'important';
     let retryCount = 0;
 
     // --- TABS (Вкладки) ---
@@ -54,15 +56,19 @@ jQuery(function($) {
 
     // --- ОБРАБОТЧИКИ КНОПОК ---
     startScanBtn.on('click', function() { 
-        if (!isWorking) { currentProcess = 'malware'; startProcess(); } 
+        if (!isWorking) { currentProcess = 'malware'; currentScanMode = 'important'; startProcess(); } 
+    });
+
+    fullScanBtn.on('click', function() { 
+        if (!isWorking) { currentProcess = 'malware'; currentScanMode = 'full'; startProcess(); } 
     });
 
     createSnapshotBtn.on('click', function() { 
-        if (!isWorking) { currentProcess = 'snapshot'; startProcess(); } 
+        if (!isWorking) { currentProcess = 'snapshot'; currentScanMode = 'important'; startProcess(); } 
     });
 
     compareSnapshotBtn.on('click', function() { 
-        if (!isWorking) { currentProcess = 'compare'; startProcess(); } 
+        if (!isWorking) { currentProcess = 'compare'; currentScanMode = 'important'; startProcess(); } 
     });
 
     // --- ЛОГИКА ПРОЦЕССА ---
@@ -77,7 +83,7 @@ jQuery(function($) {
         snapshotData = {};
         comparisonChanges = { added: [], modified: [], deleted: [] };
         
-        ajaxCall('rls_start_file_discovery', {}, function(res) {
+        ajaxCall('rls_start_file_discovery', { mode: currentScanMode }, function(res) {
             if (res.success) {
                 // Небольшая задержка перед стартом цикла
                 setTimeout(discoverFilesStep, 500); 
@@ -188,29 +194,60 @@ jQuery(function($) {
     function ajaxCall(action, data, successCallback) {
         data.action = action;
         data.nonce = rls_scanner_data.nonce;
+
+        function normalizeJsonResponse(payload) {
+            if (typeof payload === 'string') {
+                // Убираем UTF BOM / zero-width chars, которые ломают JSON.parse в некоторых окружениях.
+                const cleaned = payload.replace(/^[\uFEFF\u200B\u200C\u200D]+/, '').trim();
+                return JSON.parse(cleaned);
+            }
+            return payload;
+        }
         
         $.ajax({
             url: rls_scanner_data.ajax_url,
             type: 'POST',
             data: data,
+            dataType: 'text',
             timeout: 120000, // 2 минуты тайм-аут (достаточно для большинства хостингов)
             success: function(response) {
                 retryCount = 0; // Сброс счетчика ошибок при успехе
-                successCallback(response);
+                try {
+                    successCallback(normalizeJsonResponse(response));
+                } catch (e) {
+                    updateUI('error', 'Некорректный формат ответа сервера.');
+                }
             },
             error: function(xhr, status, error) {
                 if (status === 'abort') return; // Игнорируем ручную отмену
+
+                // Частый кейс: parsererror из-за BOM, но JSON в responseText валидный.
+                if (status === 'parsererror' && xhr && xhr.responseText) {
+                    try {
+                        const recovered = normalizeJsonResponse(xhr.responseText);
+                        retryCount = 0;
+                        successCallback(recovered);
+                        return;
+                    } catch (e) {}
+                }
                 
-                // Если ошибка сети или тайм-аут - пробуем снова
+                // Если ошибка сети или тайм-аут, пробуем снова
                 if (retryCount < 5) { 
                     retryCount++;
-                    statusText.text(`Сбой сети. Повтор ${retryCount}/5...`);
+                    let details = '';
+                    if (xhr && xhr.status) {
+                        details = ` (HTTP ${xhr.status})`;
+                    } else if (status) {
+                        details = ` (${status})`;
+                    }
+                    statusText.text(`Сбой сети${details}. Повтор ${retryCount}/5...`);
                     
                     setTimeout(function() { 
                         ajaxCall(action, data, successCallback); 
                     }, 3000);
                 } else {
-                    updateUI('error', `Сервер не отвечает (${status}). Попробуйте позже.`);
+                    const responseHint = (xhr && xhr.responseText) ? String(xhr.responseText).substring(0, 200) : '';
+                    updateUI('error', `Сервер не отвечает (${status}). ${responseHint}`);
                 }
             }
         });
@@ -225,7 +262,7 @@ jQuery(function($) {
         switch(state) { 
             case 'discovery_start': 
                 progressBar.css('width', '0%').text(''); 
-                statusTitle.text('Индексация файлов...');
+                statusTitle.text(currentProcess === 'malware' && currentScanMode === 'full' ? 'Полное сканирование...' : 'Индексация файлов...');
                 statusText.text('Подготовка...'); 
                 resultsContainer.html('<div class="rls-empty-state" style="text-align:center; padding:40px 20px; color:#a0a5aa;"><span class="spinner is-active" style="float:none;"></span><p>Составляем список файлов...</p></div>'); 
                 break; 
@@ -246,12 +283,12 @@ jQuery(function($) {
                 } else {
                     wpct = 100;
                 }
-                wpct = Math.min(99, wpct); // Не показываем 100% пока не финализируем
+                wpct = Math.min(99, wpct); // Не показываем 100%, пока не финализируем
                 
                 progressBar.css('width', wpct + '%').text(wpct + '%'); 
                 
                 let actionName = 'Обработка';
-                if (currentProcess === 'malware') actionName = 'Поиск вирусов';
+                if (currentProcess === 'malware') actionName = (currentScanMode === 'full') ? 'Полное сканирование' : 'Поиск вирусов';
                 if (currentProcess === 'snapshot') actionName = 'Создание снимка';
                 if (currentProcess === 'compare') actionName = 'Сравнение';
                 
@@ -307,8 +344,8 @@ jQuery(function($) {
                                 <td class="filepath"><code>${esc(t.file)}</code></td>
                                 <td><span class="rls-badge red" style="background:#dc3545; color:#fff; padding:3px 8px; border-radius:4px; font-weight:bold; font-size:11px;">ВИРУС</span> <span style="font-size:11px; color:#666;">${esc(t.signature)}</span></td>
                                 <td class="action-cell">
-                                    <button class="button button-small rls-neutralize-button">AI Анализ</button>
-                                    <button class="button button-small rls-quarantine-button" style="color:#d63638; border-color:#d63638; margin-left:5px;">В Карантин</button>
+                                    <button class="button button-small rls-neutralize-button">AI-анализ</button>
+                                    <button class="button button-small rls-quarantine-button" style="color:#d63638; border-color:#d63638; margin-left:5px;">В карантин</button>
                                 </td>
                              </tr>`; 
                 });
@@ -335,7 +372,7 @@ jQuery(function($) {
                                 <td class="filepath"><code>${esc(f)}</code></td>
                                 <td>
                                     <button class="button button-small rls-neutralize-button">Проверить (AI)</button>
-                                    <button class="button button-small rls-quarantine-button" style="color:#d63638; border-color:#d63638; margin-left:5px;">В Карантин</button>
+                                    <button class="button button-small rls-quarantine-button" style="color:#d63638; border-color:#d63638; margin-left:5px;">В карантин</button>
                                 </td>
                              </tr>`;
                 });
@@ -345,7 +382,7 @@ jQuery(function($) {
                                 <td class="filepath"><code>${esc(f)}</code></td>
                                 <td>
                                     <button class="button button-small rls-neutralize-button">Проверить (AI)</button>
-                                    <button class="button button-small rls-quarantine-button" style="color:#d63638; border-color:#d63638; margin-left:5px;">В Карантин</button>
+                                    <button class="button button-small rls-quarantine-button" style="color:#d63638; border-color:#d63638; margin-left:5px;">В карантин</button>
                                 </td>
                              </tr>`;
                 });
@@ -387,13 +424,19 @@ jQuery(function($) {
                     button.replaceWith('<span style="color:blue; font-weight:bold;"><span class="dashicons dashicons-yes"></span> Безопасен (AI)</span>');
                 } else if (res.data.result === 'ai_virus') {
                     row.css('background-color', '#ffe6e6');
-                    button.parent().html('<span style="color:red; font-weight:bold;">⚠️ ВИРУС (AI)</span>');
+                    const actionCell = button.closest('.action-cell');
+                    if (actionCell.length) {
+                        actionCell.find('.rls-neutralize-button').remove();
+                        if (!actionCell.find('.rls-ai-virus-label').length) {
+                            actionCell.prepend('<span class="rls-ai-virus-label" style="color:red; font-weight:bold; margin-right:8px;">⚠️ ВИРУС (AI)</span>');
+                        }
+                    }
                     
                     if (res.data.snippet) {
                         row.after(`<tr><td colspan="3"><div class="rls-virus-snippet" style="background:#2c3338; color:#f0f0f1; padding:15px; border-radius:5px; margin-top:10px; font-size:11px; overflow-x:auto;"><strong>Фрагмент кода:</strong><pre>${esc(res.data.snippet)}</pre></div></td></tr>`);
                     }
                 } else if (res.data.result === 'too_large') {
-                    button.replaceWith('<span style="color:#666; font-size:12px;">Файл слишком велик (>100KB)</span>');
+                    button.replaceWith('<span style="color:#666; font-size:12px;">Файл слишком велик для AI-анализа</span>');
                 }
             } else {
                 alert('Ошибка: ' + res.data);
@@ -426,7 +469,7 @@ jQuery(function($) {
                 // Можно добавить уведомление
             } else {
                 alert('Error: ' + response.data);
-                button.prop('disabled', false).text('В Карантин');
+                button.prop('disabled', false).text('В карантин');
             }
         });
     });
@@ -478,3 +521,5 @@ jQuery(function($) {
         return $('<div>').text(text).html(); 
     }
 });
+
+

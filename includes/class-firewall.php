@@ -2,7 +2,7 @@
 /**
  * RLS_Firewall
  * Модуль WAF. Версия 1.7.0
- * Обновлено: Интегрирована полная база плохих ботов из старого скрипта.
+ * Обновлено: Интегрирована полная Р±Р°Р·Р° плохих ботов РёР· старого скрипта.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -30,6 +30,7 @@ class RLS_Firewall {
     
     const OPT_BLOCKED_IPS      = 'rls_blocked_ips';
     const OPT_MANUAL_BLACKLIST = 'rls_manual_blacklist';
+    const OPT_WAF_BLACKLIST    = 'rls_waf_blacklist';
     const OPT_GLOBAL_BLACKLIST = 'rls_global_blacklist';
     const OPT_WHITELIST        = 'rls_ip_whitelist';
     
@@ -55,9 +56,24 @@ class RLS_Firewall {
     private $client_ip = '';
     private $user_agent = '';
     private $request_uri = '';
+    private $search_bot_status = null;
+
+    const CLOUDFLARE_IPV4_CIDRS = [
+        '173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22',
+        '141.101.64.0/18', '108.162.192.0/18', '190.93.240.0/20', '188.114.96.0/20',
+        '197.234.240.0/22', '198.41.128.0/17', '162.158.0.0/15', '104.16.0.0/13',
+        '104.24.0.0/14', '172.64.0.0/13', '131.0.72.0/22',
+    ];
+
+    const CLOUDFLARE_IPV6_CIDRS = [
+        '2400:cb00::/32', '2606:4700::/32', '2803:f800::/32', '2405:b500::/32',
+        '2405:8100::/32', '2a06:98c0::/29', '2c0f:f248::/32',
+    ];
     
     public function init() {
-        add_action( 'plugins_loaded', [ $this, 'run_firewall' ], 0 );
+        // Вешаем на init, так как добавление callbacks на plugins_loaded изнутри
+        // plugins_loaded может не выполниться в текущем запросе.
+        add_action( 'init', [ $this, 'run_firewall' ], 0 );
         add_action( 'send_headers', [ $this, 'send_security_headers' ] );
         add_action( 'template_redirect', [ $this, 'check_404_probing' ] );
         add_action( 'init', [ $this, 'check_xmlrpc' ], 1 );
@@ -66,7 +82,11 @@ class RLS_Firewall {
     public function send_security_headers() {
         if ( headers_sent() ) return;
         $settings = get_option( 'rls_settings', [] );
-        if ( empty( $settings['enable_firewall'] ) ) return;
+        if ( function_exists( 'rls_is_firewall_runtime_enabled' ) ) {
+            if ( ! rls_is_firewall_runtime_enabled( $settings ) ) return;
+        } elseif ( empty( $settings['enable_firewall'] ) ) {
+            return;
+        }
 
         @header( 'X-Frame-Options: SAMEORIGIN' );
         @header( 'X-Content-Type-Options: nosniff' );
@@ -77,43 +97,233 @@ class RLS_Firewall {
     }
 
     public function run_firewall() {
+        // Не фильтруем wp-admin/admin-ajax, чтобы не ломать админские операции
+        // (сканер, настройки, импорт/экспорт и т.д.).
+        if ( function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() ) {
+            return;
+        }
+
         $this->client_ip   = $this->get_universal_ip();
         $this->user_agent  = $_SERVER['HTTP_USER_AGENT'] ?? '';
         $this->request_uri = $_SERVER['REQUEST_URI'] ?? '';
 
+        $this->handle_frontend_diagnostics();
+
         if ( $this->is_ip_whitelisted() ) return;
 
         $settings = get_option( 'rls_settings', [] );
-        if ( empty( $settings['enable_firewall'] ) ) return;
-
-        if ( current_user_can( 'manage_options' ) && ! $this->is_manually_banned() ) return;
-
-        $block_reason = $this->check_blacklists();
-        if ( $block_reason ) $this->trigger_block( $block_reason );
-
-        if ( $this->check_rate_limit() ) $this->block_ip( "Превышен лимит запросов (Anti-DDoS)" );
-
-        // 1. Сначала проверяем на хороших ботов (Whitelisting)
-        $bot_status = $this->verify_search_bot();
-        if ( $bot_status === 'fake' ) {
-            $this->log_attack_type('bot');
-            $this->block_ip( "Fake Googlebot/Yandexbot detected" );
-        } elseif ( $bot_status === 'verified' ) {
-            // Если бот подтвержден (настоящий Google), мы не проверяем его по списку плохих ботов
+        if ( function_exists( 'rls_is_firewall_runtime_enabled' ) ) {
+            if ( ! rls_is_firewall_runtime_enabled( $settings ) ) return;
+        } elseif ( empty( $settings['enable_firewall'] ) ) {
             return;
         }
 
-        // 2. Если не подтвержденный хороший бот - проверяем по черному списку User-Agents
-        $this->check_bad_user_agents();
-        
+        $is_full_protection = ! function_exists( 'rls_is_full_protection_mode' ) || rls_is_full_protection_mode();
+        $should_run_strict_bot_protection = function_exists( 'rls_should_run_strict_bot_protection' )
+            ? rls_should_run_strict_bot_protection()
+            : $is_full_protection;
+
+        $is_privileged_admin = current_user_can( 'manage_options' ) && ! $this->is_manually_banned();
+
+        if ( $is_full_protection ) {
+            $lang_reason = $this->check_language_rules();
+            if ( $lang_reason ) {
+                $this->record_access_denied( 'language', $lang_reason, 'pending', 'language' );
+                $this->trigger_block( $lang_reason );
+            }
+        }
+
+        $manual_list_reason = $this->check_manual_blacklist_rules();
+        if ( $manual_list_reason ) {
+            $this->record_access_denied( 'blacklist', $manual_list_reason, 'pending', 'manual' );
+            $this->trigger_block( $manual_list_reason );
+        }
+
+        if ( $is_full_protection ) {
+            $geo_reason = $this->check_country_rules();
+            if ( $geo_reason ) {
+                $this->record_access_denied( 'geo', $geo_reason, 'pending', 'geo' );
+                $this->trigger_block( $geo_reason );
+            }
+        }
+
+        $search_bot_status = 'unknown';
+        $global_list_reason = $this->check_global_blacklist_rule();
+        if ( $global_list_reason ) {
+            $search_bot_status = $this->get_search_bot_status();
+        }
+        if ( $global_list_reason && ! $this->should_bypass_global_blacklist_for_bot( $search_bot_status ) ) {
+            $this->record_access_denied( 'blacklist', $global_list_reason, 'global', 'blacklist' );
+            $this->trigger_block( $global_list_reason );
+        }
+
+        // Администратор не освобождается от GeoIP и blacklist проверок,
+        // но может быть освобожден от "шумных" эвристик ниже.
+        if ( $is_privileged_admin ) return;
+
+        if ( $this->check_rate_limit() ) $this->block_ip( "Превышен лимит запросов (Anti-DDoS)" );
+
+        // 1. Сначала проверяем РЅР° хороших ботов (Whitelisting)
+        if ( $should_run_strict_bot_protection ) {
+            if ( $search_bot_status === 'unknown' ) {
+                $search_bot_status = $this->get_search_bot_status();
+            }
+            $bot_status = $search_bot_status;
+            if ( $bot_status === 'fake' ) {
+                if ( $this->is_allowed_yandex_dzen_feed_request() ) {
+                    return;
+                }
+                if ( ! empty( $settings['soft_search_bot_mode'] ) || ! isset( $settings['soft_search_bot_mode'] ) ) {
+                    $this->log_attack_type( 'bot' );
+                    if ( class_exists( 'RLS_Logger' ) ) {
+                        RLS_Logger::log_attack( $this->client_ip, 'bot', 'Soft mode: suspicious search bot allowed (DNS verification mismatch)' );
+                    }
+                    return;
+                }
+                $this->log_attack_type( 'bot' );
+                $this->block_ip( 'Fake Googlebot/Yandexbot detected', 'bot' );
+            } elseif ( $bot_status === 'verified' ) {
+                return;
+            }
+
+            $this->check_bad_user_agents();
+        }
+
         $this->perform_deep_scan();
+        return;
+
     }
 
-    private function check_blacklists() {
-        if ( $this->is_manually_banned() ) return "IP находится в черном списке администратора";
+    private function are_local_blacklists_enabled() {
+        $settings = get_option( 'rls_settings', [] );
+        if ( isset( $settings['blacklists_enabled'] ) && (int) $settings['blacklists_enabled'] !== 1 ) {
+            return false;
+        }
+        return true;
+    }
+
+    private function check_manual_blacklist_rules() {
+        if ( ! $this->are_local_blacklists_enabled() ) {
+            return false;
+        }
+        if ( $this->is_waf_blacklisted() ) return "IP находится в WAF черном списке";
+        if ( $this->is_manual_blacklisted() ) return "IP находится в черном списке администратора";
         if ( $this->is_auto_blocked() ) return "IP временно заблокирован за подозрительную активность";
+        return false;
+    }
+
+    private function check_global_blacklist_rule() {
+        $settings = get_option( 'rls_settings', [] );
+        if ( ! function_exists( 'rls_is_global_blacklist_runtime_enabled' ) || ! rls_is_global_blacklist_runtime_enabled( $settings ) ) {
+            return false;
+        }
         $global_list = get_option( self::OPT_GLOBAL_BLACKLIST, [] );
         if ( is_array( $global_list ) && in_array( $this->client_ip, $global_list ) ) return "IP заблокирован в глобальной базе угроз";
+        return false;
+    }
+
+    private function check_language_rules() {
+        $settings = get_option( 'rls_settings', [] );
+        if ( empty( $settings['language_filter_enabled'] ) ) {
+            return false;
+        }
+
+        $raw_codes = $settings['language_codes'] ?? [];
+        if ( ! is_array( $raw_codes ) ) {
+            $raw_codes = explode( ',', (string) $raw_codes );
+        }
+        $codes = [];
+        foreach ( $raw_codes as $code ) {
+            $lang = strtolower( preg_replace( '/[^a-z]/i', '', (string) $code ) );
+            if ( preg_match( '/^[a-z]{2,3}$/', $lang ) ) {
+                $codes[] = $lang;
+            }
+        }
+        $codes = array_values( array_unique( $codes ) );
+        if ( empty( $codes ) ) {
+            return false;
+        }
+
+        $accept_language = isset( $_SERVER['HTTP_ACCEPT_LANGUAGE'] ) ? strtolower( (string) $_SERVER['HTTP_ACCEPT_LANGUAGE'] ) : '';
+        if ( $accept_language === '' ) {
+            return 'Языковой фильтр: отсутствует заголовок Accept-Language';
+        }
+
+        $browser_langs = [];
+        foreach ( explode( ',', $accept_language ) as $part ) {
+            $token = trim( explode( ';', $part )[0] ?? '' );
+            if ( preg_match( '/^([a-z]{2,3})(-[a-z]{2,4})?$/', $token, $m ) ) {
+                $browser_langs[] = $m[1];
+            }
+        }
+        $browser_langs = array_values( array_unique( $browser_langs ) );
+        if ( empty( $browser_langs ) ) {
+            return 'Языковой фильтр: язык браузера не определен';
+        }
+
+        $mode = $settings['language_mode'] ?? 'allow';
+        $mode = in_array( $mode, [ 'allow', 'block' ], true ) ? $mode : 'allow';
+
+        $intersection = array_intersect( $browser_langs, $codes );
+        if ( $mode === 'allow' && empty( $intersection ) ) {
+            return 'Языковой фильтр: язык браузера не разрешен (' . implode( ',', $browser_langs ) . ')';
+        }
+        if ( $mode === 'block' && ! empty( $intersection ) ) {
+            return 'Языковой фильтр: язык браузера в списке блокировки (' . implode( ',', $browser_langs ) . ')';
+        }
+
+        return false;
+    }
+
+    private function check_country_rules() {
+        if ( ! class_exists( 'RLS_GeoIP' ) ) {
+            return false;
+        }
+        $settings = get_option( 'rls_settings', [] );
+        if ( empty( $settings['geo_blocking_enabled'] ) ) {
+            return false;
+        }
+
+        $allow_list = $settings['geo_countries_allow'] ?? [];
+        $block_list = $settings['geo_countries_block'] ?? [];
+        $countries = $settings['geo_countries'] ?? [];
+        if ( ! is_array( $allow_list ) ) $allow_list = [];
+        if ( ! is_array( $block_list ) ) $block_list = [];
+        if ( ! is_array( $countries ) ) $countries = [];
+        if ( empty( $allow_list ) && empty( $block_list ) && empty( $countries ) ) {
+            return false;
+        }
+
+        $mode = $settings['geo_mode'] ?? 'block';
+        $mode = in_array( $mode, [ 'allow', 'block' ], true ) ? $mode : 'block';
+
+        $country = RLS_GeoIP::lookup_country_code( $this->client_ip );
+        if ( empty( $country ) ) {
+            // Fail-open: на некоторых хостингах/прокси GeoIP может временно не определяться.
+            // Чтобы не ломать доступ легитимным пользователям, не блокируем при unknown country.
+            return false;
+        }
+
+        $country_uc = strtoupper( $country );
+        $allow_list = array_map( 'strtoupper', (array) $allow_list );
+        $block_list = array_map( 'strtoupper', (array) $block_list );
+
+        // Backward compatibility with old single list.
+        if ( empty( $allow_list ) && empty( $block_list ) && ! empty( $countries ) ) {
+            if ( $mode === 'allow' ) {
+                $allow_list = array_map( 'strtoupper', (array) $countries );
+            } else {
+                $block_list = array_map( 'strtoupper', (array) $countries );
+            }
+        }
+
+        if ( $mode === 'block' && in_array( $country_uc, $block_list, true ) ) {
+            return 'GeoIP: страна заблокирована (' . $country . ')';
+        }
+        if ( $mode === 'allow' && ! in_array( $country_uc, $allow_list, true ) ) {
+            return 'GeoIP: страна не в списке разрешенных (' . $country . ')';
+        }
+
         return false;
     }
 
@@ -122,9 +332,18 @@ class RLS_Firewall {
         return is_array( $whitelist ) && in_array( $this->client_ip, $whitelist );
     }
 
-    private function is_manually_banned() {
+    private function is_manual_blacklisted() {
         $manual_list = get_option( self::OPT_MANUAL_BLACKLIST, [] );
-        return is_array( $manual_list ) && in_array( $this->client_ip, $manual_list );
+        return is_array( $manual_list ) && in_array( $this->client_ip, $manual_list, true );
+    }
+
+    private function is_waf_blacklisted() {
+        $waf_list = get_option( self::OPT_WAF_BLACKLIST, [] );
+        return is_array( $waf_list ) && in_array( $this->client_ip, $waf_list, true );
+    }
+
+    private function is_manually_banned() {
+        return $this->is_manual_blacklisted() || $this->is_waf_blacklisted();
     }
 
     private function is_auto_blocked() {
@@ -143,15 +362,95 @@ class RLS_Firewall {
     public function get_universal_ip() {
         $settings = get_option( 'rls_settings', [] );
         $trust_cf = ! empty( $settings['trust_cloudflare'] );
-        if ( $trust_cf && isset( $_SERVER['HTTP_CF_CONNECTING_IP'] ) ) {
-            if ( filter_var( $_SERVER['HTTP_CF_CONNECTING_IP'], FILTER_VALIDATE_IP ) ) return $_SERVER['HTTP_CF_CONNECTING_IP'];
+        $remote_addr = (string) ( $_SERVER['REMOTE_ADDR'] ?? '' );
+        $remote_is_valid = filter_var( $remote_addr, FILTER_VALIDATE_IP ) !== false;
+        $remote_is_private = $remote_is_valid
+            && ! filter_var( $remote_addr, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE );
+
+        if ( $trust_cf && $remote_is_valid && $this->ip_in_cidrs( $remote_addr, array_merge( self::CLOUDFLARE_IPV4_CIDRS, self::CLOUDFLARE_IPV6_CIDRS ) ) ) {
+            $cf_ip = (string) ( $_SERVER['HTTP_CF_CONNECTING_IP'] ?? '' );
+            if ( filter_var( $cf_ip, FILTER_VALIDATE_IP ) ) {
+                return $cf_ip;
+            }
         }
-        return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+
+        // За proxy-заголовки отвечают только доверенные промежуточные прокси
+        // (обычно private REMOTE_ADDR от nginx/apache/haproxy).
+        if ( $remote_is_private ) {
+            $x_forwarded_for = (string) ( $_SERVER['HTTP_X_FORWARDED_FOR'] ?? '' );
+            if ( $x_forwarded_for !== '' ) {
+                $parts = array_map( 'trim', explode( ',', $x_forwarded_for ) );
+                foreach ( $parts as $candidate ) {
+                    if ( filter_var( $candidate, FILTER_VALIDATE_IP ) ) {
+                        return $candidate;
+                    }
+                }
+            }
+
+            $x_real_ip = (string) ( $_SERVER['HTTP_X_REAL_IP'] ?? '' );
+            if ( filter_var( $x_real_ip, FILTER_VALIDATE_IP ) ) {
+                return $x_real_ip;
+            }
+        }
+
+        if ( $remote_is_valid ) {
+            return $remote_addr;
+        }
+
+        return '0.0.0.0';
+    }
+
+    private function ip_in_cidrs( $ip, $cidrs ) {
+        foreach ( $cidrs as $cidr ) {
+            if ( $this->ip_in_cidr( $ip, $cidr ) ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function ip_in_cidr( $ip, $cidr ) {
+        $parts = explode( '/', $cidr, 2 );
+        if ( count( $parts ) !== 2 ) {
+            return false;
+        }
+
+        $range_ip = $parts[0];
+        $prefix = (int) $parts[1];
+
+        $bin_ip = @inet_pton( $ip );
+        $bin_range = @inet_pton( $range_ip );
+        if ( $bin_ip === false || $bin_range === false || strlen( $bin_ip ) !== strlen( $bin_range ) ) {
+            return false;
+        }
+
+        $max_bits = strlen( $bin_ip ) * 8;
+        if ( $prefix < 0 || $prefix > $max_bits ) {
+            return false;
+        }
+
+        $bytes = (int) floor( $prefix / 8 );
+        $bits = $prefix % 8;
+
+        if ( $bytes > 0 && substr( $bin_ip, 0, $bytes ) !== substr( $bin_range, 0, $bytes ) ) {
+            return false;
+        }
+
+        if ( $bits === 0 ) {
+            return true;
+        }
+
+        $mask = 0xFF << ( 8 - $bits );
+        $ip_byte = ord( $bin_ip[ $bytes ] );
+        $range_byte = ord( $bin_range[ $bytes ] );
+
+        return ( $ip_byte & $mask ) === ( $range_byte & $mask );
     }
 
     public function check_xmlrpc() {
         $settings = get_option( 'rls_settings', [] );
         if ( $this->is_ip_whitelisted() ) return;
+        if ( function_exists( 'rls_is_scanner_only_mode' ) && rls_is_scanner_only_mode() ) return;
         if ( ! empty( $settings['disable_xmlrpc'] ) ) {
             if ( stripos( $_SERVER['SCRIPT_NAME'] ?? '', 'xmlrpc.php' ) !== false ) {
                 $this->log_attack_type( 'bot' );
@@ -174,12 +473,31 @@ class RLS_Firewall {
 
         if ( $is_attack ) {
             $this->log_attack_type( 'bot' ); 
-            $this->block_ip( "Probing Trap: " . esc_html( $uri ) );
+            $this->block_ip( "Probing Trap: " . esc_html( $uri ), 'bot' );
         }
     }
 
     private function log_attack_type( $type ) {
         if ( class_exists( 'RLS_Stats_Helper' ) ) RLS_Stats_Helper::increment_stat( 'details_' . $type );
+    }
+
+    private function record_access_denied( $type, $reason, $status = 'pending', $source_kind = null ) {
+        if ( class_exists( 'RLS_Logger' ) ) {
+            RLS_Logger::log_attack( $this->client_ip, $type, $reason );
+        }
+
+        if ( class_exists( 'RLS_API_Client' ) ) {
+            $source_kind = is_string( $source_kind ) && $source_kind !== '' ? $source_kind : $type;
+            if ( ! in_array( $source_kind, [ 'waf', 'brute', 'manual', 'geo', 'language', 'blacklist', 'bot' ], true ) ) {
+                $source_kind = $type;
+            }
+
+            RLS_API_Client::submit_banned_ip( $this->client_ip, $reason, [
+                'status' => $status,
+                'source_kind' => $source_kind,
+                'type' => $type,
+            ] );
+        }
     }
 
     private function check_rate_limit() {
@@ -197,26 +515,79 @@ class RLS_Firewall {
     private function verify_search_bot() {
         $ua = strtolower( $this->user_agent );
         $is_google = strpos( $ua, 'googlebot' ) !== false;
-        $is_yandex = strpos( $ua, 'yandexbot' ) !== false;
+        $is_yandex = preg_match( '/yandex(bot|images|image|video|media|news|blogs|favicons|metrika|direct|webmaster|mirrordetector)/i', $ua ) === 1;
+        $is_mailru = preg_match( '/(mail\\.ru|mailru|go\\-mail\\.ru|mail\\.ru_bot)/i', $ua ) === 1;
         $is_bing   = strpos( $ua, 'bingbot' ) !== false;
-        if ( ! $is_google && ! $is_yandex && ! $is_bing ) return 'unknown';
+        if ( ! $is_google && ! $is_yandex && ! $is_mailru && ! $is_bing ) return 'unknown';
+
+        $settings = get_option( 'rls_settings', [] );
+        if ( ( $is_google && empty( $settings['allow_googlebot'] ) ) ||
+             ( $is_yandex && empty( $settings['allow_yandexbot'] ) ) ||
+             ( $is_mailru && empty( $settings['allow_mailru_bot'] ) ) ||
+             ( $is_bing && empty( $settings['allow_bingbot'] ) ) ) {
+            return 'unknown';
+        }
 
         $cache_key = 'rls_bot_' . md5( $this->client_ip );
         $status = get_transient( $cache_key );
         if ( $status ) return $status;
 
         $hostname = @gethostbyaddr( $this->client_ip );
-        $status = 'fake';
-        if ( $hostname ) {
-            if ( $is_google && preg_match( '/\.google(bot)?\.com$/i', $hostname ) ) $status = 'verified';
-            elseif ( $is_yandex && preg_match( '/(\.yandex\.(ru|com|net)|\.yandex\.net)$/i', $hostname ) ) $status = 'verified';
-            elseif ( $is_bing && preg_match( '/\.search\.msn\.com$/i', $hostname ) ) $status = 'verified';
+        $status = 'unknown';
+        if ( $hostname && $hostname !== $this->client_ip ) {
+            if ( $is_google && preg_match( '/\.google(bot)?\.com$/i', $hostname ) ) $status = $this->hostname_resolves_to_client_ip( $hostname ) ? 'verified' : 'fake';
+            elseif ( $is_yandex && preg_match( '/(\.yandex\.(ru|com|net)|\.yandex\.net)$/i', $hostname ) ) $status = $this->hostname_resolves_to_client_ip( $hostname ) ? 'verified' : 'fake';
+            elseif ( $is_mailru && preg_match( '/(\.mail\.ru|\.go-mail\.ru)$/i', $hostname ) ) $status = $this->hostname_resolves_to_client_ip( $hostname ) ? 'verified' : 'fake';
+            elseif ( $is_bing && preg_match( '/\.search\.msn\.com$/i', $hostname ) ) $status = $this->hostname_resolves_to_client_ip( $hostname ) ? 'verified' : 'fake';
         }
         set_transient( $cache_key, $status, DAY_IN_SECONDS );
         return $status;
     }
 
+    private function get_search_bot_status() {
+        if ( $this->search_bot_status !== null ) {
+            return $this->search_bot_status;
+        }
+
+        $this->search_bot_status = $this->verify_search_bot();
+        return $this->search_bot_status;
+    }
+
+    private function should_bypass_global_blacklist_for_bot( $bot_status ) {
+        return $bot_status === 'verified';
+    }
+
+    private function hostname_resolves_to_client_ip( $hostname ) {
+        if ( empty( $hostname ) || empty( $this->client_ip ) ) return false;
+        $records = @gethostbynamel( $hostname );
+        if ( is_array( $records ) && in_array( $this->client_ip, $records, true ) ) return true;
+        $resolved_ip = @gethostbyname( $hostname );
+        return is_string( $resolved_ip ) && $resolved_ip === $this->client_ip;
+    }
+
+    private function is_allowed_yandex_dzen_feed_request() {
+        $ua = strtolower( $this->user_agent );
+        $uri = strtolower( (string) $this->request_uri );
+
+        if ( strpos( $uri, '/feed/dzen-posts/' ) === false ) {
+            return false;
+        }
+
+        if ( strpos( $ua, 'yandex' ) === false ) {
+            return false;
+        }
+
+        $method = strtoupper( (string) ( $_SERVER['REQUEST_METHOD'] ?? 'GET' ) );
+        return $method === 'GET' || $method === 'HEAD';
+    }
+
     private function perform_deep_scan() {
+        // На wp-login.php работает отдельный модуль защиты входа (RLS_Login_Security),
+        // а WAF-проверка POST здесь может давать ложные SQLi/XSS срабатывания на паролях.
+        if ( strpos( $this->request_uri, 'wp-login.php' ) !== false && ! empty( $_POST ) ) {
+            return;
+        }
+
         $this->scan_value( rawurldecode( $this->request_uri ), 'URI' );
         if ( ! empty( $_POST ) ) $this->scan_array( $_POST, 'POST' );
         if ( ! empty( $_COOKIE ) ) $this->scan_array( $_COOKIE, 'COOKIE' );
@@ -243,28 +614,40 @@ class RLS_Firewall {
                     elseif ( $type === 'code_execution' ) $stat_type = 'rce';
                     elseif ( $type === 'lfi' ) $stat_type = 'lfi';
                     $this->log_attack_type( $stat_type );
-                    $this->block_ip( "Обнаружено: {$cfg['reason']} в $ctx" );
+                    $permanent_blacklist = in_array( $type, [ 'sql_injection', 'code_execution', 'xss', 'lfi' ], true );
+                    $this->block_ip( "Обнаружено: {$cfg['reason']} в $ctx", 'waf', $permanent_blacklist );
                 }
             }
         }
     }
 
     /**
-     * Проверка User-Agent по базе из старого скрипта
+     * Проверка User-Agent РїРѕ Р±Р°Р·Рµ РёР· старого скрипта
      */
     private function check_bad_user_agents() {
+        if ( function_exists( 'rls_should_run_strict_bot_protection' ) && ! rls_should_run_strict_bot_protection() ) {
+            return;
+        }
+
         $ua = $this->user_agent;
+
+        if ( $this->is_allowed_configured_bot() ) {
+            return;
+        }
         
         // Базовая проверка
         if ( empty( $ua ) ) { 
-            $this->log_attack_type('bot'); 
-            $this->block_ip( "Empty User-Agent" ); 
+            if ( ! $this->is_api_or_service_endpoint_request() ) {
+                $this->log_attack_type('bot'); 
+                $this->block_ip( "Empty User-Agent", 'bot' ); 
+            }
+            return;
         }
 
         if ( $_SERVER['REQUEST_METHOD'] === 'POST' && empty( $_SERVER['HTTP_REFERER'] ) ) {
             if ( strpos( $this->request_uri, 'wp-login.php' ) !== false || strpos( $this->request_uri, 'xmlrpc.php' ) !== false ) {
                 $this->log_attack_type('bot');
-                $this->block_ip( "POST request without Referer" );
+                $this->block_ip( "POST request without Referer", 'bot' );
             }
         }
 
@@ -272,25 +655,104 @@ class RLS_Firewall {
         $bad_bots = $this->get_bad_bot_signatures();
 
         // Проверяем вхождение
-        // stripos - регистронезависимый поиск (аналог strtolower + strpos)
+        // stripos - регистронезависимый поиск (Р°РЅР°Р»РѕРі strtolower + strpos)
         foreach ( $bad_bots as $bot ) {
             if ( stripos( $ua, $bot ) !== false ) {
                 $this->log_attack_type('bot');
-                $this->block_ip( "Bad Bot Detected: " . esc_html( $bot ) );
+                $this->block_ip( "Bad Bot Detected: " . esc_html( $bot ), 'bot' );
                 // IP блокируется, скрипт завершается внутри block_ip -> trigger_block
             }
         }
     }
 
-    private function block_ip( $reason ) {
+    private function is_allowed_configured_bot() {
+        $settings = get_option( 'rls_settings', [] );
+        $ua = strtolower( $this->user_agent );
+
+        $map = [
+            'allow_googlebot'      => 'googlebot',
+            'allow_yandexbot'      => 'yandex',
+            'allow_mailru_bot'     => 'mail.ru',
+            'allow_bingbot'        => 'bingbot',
+            'allow_duckduckbot'   => 'duckduckbot',
+            'allow_baiduspider'   => 'baiduspider',
+            'allow_applebot'      => 'applebot',
+            'allow_slurp'         => 'slurp',
+            'allow_seznambot'     => 'seznambot',
+            'allow_naverbot'      => 'naverbot',
+            'allow_petalbot'      => 'petalbot',
+            'allow_sogou'         => 'sogou',
+            'allow_exabot'        => 'exabot',
+            'allow_qwantbot'      => 'qwantify',
+            'allow_mojeekbot'     => 'mojeekbot',
+            'allow_gptbot'        => 'gptbot',
+            'allow_chatgpt_user'  => 'chatgpt-user',
+            'allow_oai_searchbot' => 'oai-searchbot',
+            'allow_claudebot'     => 'claudebot',
+            'allow_perplexitybot' => 'perplexitybot',
+            'allow_cohere_ai'     => 'cohere-ai',
+            'allow_amazonbot'     => 'amazonbot',
+            'allow_ccbot'         => 'ccbot',
+            'allow_bytespider'    => 'bytespider',
+        ];
+
+        foreach ( $map as $setting_key => $needle ) {
+            if ( ! empty( $settings[ $setting_key ] ) && strpos( $ua, $needle ) !== false ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function is_api_or_service_endpoint_request() {
+        $uri = strtolower( (string) $this->request_uri );
+        $method = strtoupper( (string) ( $_SERVER['REQUEST_METHOD'] ?? 'GET' ) );
+
+        if ( $method === 'HEAD' ) return true;
+        if ( strpos( $uri, '/wp-json/' ) !== false ) return true;
+        if ( strpos( $uri, 'rest_route=' ) !== false ) return true;
+        if ( strpos( $uri, '/feed/' ) !== false ) return true;
+
+        return false;
+    }
+
+    private function block_ip( $reason, $type = null, $permanent = false ) {
         $blocked = get_option( self::OPT_BLOCKED_IPS, [] );
         $blocked[ $this->client_ip ] = [ 'reason' => $reason, 'expires' => time() + self::BLOCK_DURATION ];
         update_option( self::OPT_BLOCKED_IPS, $blocked, false );
         
-        $type = 'waf'; 
-        if ( stripos($reason, 'bot') !== false ) $type = 'bot';
+        if ( ! is_string( $type ) || $type === '' ) {
+            $type = stripos( $reason, 'bot' ) !== false ? 'bot' : 'waf';
+        }
+
+        if ( $permanent ) {
+            $waf_blacklist = get_option( self::OPT_WAF_BLACKLIST, [] );
+            if ( ! is_array( $waf_blacklist ) ) {
+                $waf_blacklist = [];
+            }
+
+            if ( ! in_array( $this->client_ip, $waf_blacklist, true ) ) {
+                $waf_blacklist[] = $this->client_ip;
+                update_option( self::OPT_WAF_BLACKLIST, $waf_blacklist, false );
+            }
+        }
         
         if ( class_exists( 'RLS_Logger' ) ) RLS_Logger::log_attack( $this->client_ip, $type, $reason );
+        if ( class_exists( 'RLS_API_Client' ) ) {
+            $source_kind = 'waf';
+            if ( $type === 'brute' ) {
+                $source_kind = 'brute';
+            } elseif ( $type === 'manual' ) {
+                $source_kind = 'manual';
+            }
+
+            RLS_API_Client::submit_banned_ip( $this->client_ip, $reason, [
+                'status' => $permanent ? 'global' : 'pending',
+                'source_kind' => $source_kind,
+                'type' => $type,
+            ] );
+        }
         
         $this->trigger_block( $reason );
     }
@@ -300,7 +762,7 @@ class RLS_Firewall {
         $html = "<!DOCTYPE html><html><head><title>403 Forbidden</title></head>
         <body style='font-family:sans-serif; text-align:center; padding:50px;'>
         <h1 style='color:#d63638;'>403 Access Denied</h1>
-        <p>Ваш IP адрес был заблокирован системой безопасности.</p>
+        <p>Ваш IP-адрес был заблокирован системой безопасности.</p>
         <p style='background:#f0f0f1; display:inline-block; padding:10px; border-radius:5px;'>Причина: <strong>" . esc_html( $reason ) . "</strong></p>
         <p>IP: " . esc_html( $this->client_ip ) . "</p>
         <p style='color:#666; font-size:12px;'>Protected by Rybinsk Lab Security</p>
@@ -308,9 +770,121 @@ class RLS_Firewall {
         wp_die( $html, "Access Denied", [ 'response' => 403 ] );
     }
 
+    private function handle_frontend_diagnostics() {
+        $is_admin_debug = isset( $_GET['rls_geo_test'] ) && current_user_can( 'manage_options' );
+        $is_public_debug = isset( $_GET['rls_fw_test'] );
+
+        if ( ! $is_admin_debug && ! $is_public_debug ) {
+            return;
+        }
+
+        $settings = get_option( 'rls_settings', [] );
+        $country = class_exists( 'RLS_GeoIP' ) ? RLS_GeoIP::lookup_country_code( $this->client_ip ) : '';
+        $geo_db_path = class_exists( 'RLS_GeoIP' ) ? RLS_GeoIP::get_database_path() : '';
+        $is_whitelisted = $this->is_ip_whitelisted();
+        $firewall_enabled = ! empty( $settings['enable_firewall'] );
+        $is_full_protection = ! function_exists( 'rls_is_full_protection_mode' ) || rls_is_full_protection_mode();
+        $should_run_strict_bot_protection = function_exists( 'rls_should_run_strict_bot_protection' )
+            ? rls_should_run_strict_bot_protection()
+            : $is_full_protection;
+        $global_blacklist_bypassed = false;
+
+        $lang_reason = $this->check_language_rules();
+        $manual_list_reason = $this->check_manual_blacklist_rules();
+        $geo_reason = $this->check_country_rules();
+        $global_list_reason = $this->check_global_blacklist_rule();
+        $search_bot_status = ( $global_list_reason || $should_run_strict_bot_protection ) ? $this->get_search_bot_status() : 'unknown';
+
+        $would_block_reason = '';
+        if ( $is_whitelisted ) {
+            $would_block_reason = '';
+        } elseif ( ! $firewall_enabled ) {
+            $would_block_reason = '';
+        } elseif ( ! empty( $lang_reason ) ) {
+            $would_block_reason = $lang_reason;
+        } elseif ( ! empty( $manual_list_reason ) ) {
+            $would_block_reason = $manual_list_reason;
+        } elseif ( ! empty( $geo_reason ) ) {
+            $would_block_reason = $geo_reason;
+        } elseif ( ! empty( $global_list_reason ) ) {
+            if ( $this->should_bypass_global_blacklist_for_bot( $search_bot_status ) ) {
+                $global_blacklist_bypassed = true;
+            } else {
+                $would_block_reason = $global_list_reason;
+            }
+        }
+
+        $base_payload = [
+            'time' => gmdate( 'c' ),
+            'resolved_ip' => $this->client_ip,
+            'country' => $country,
+            'geo_db_path' => $geo_db_path,
+            'geo_db_exists' => ( $geo_db_path && is_file( $geo_db_path ) ),
+            'firewall_enabled' => $firewall_enabled,
+            'is_whitelisted' => $is_whitelisted,
+            'would_block' => ( $would_block_reason !== '' ),
+            'would_block_reason' => $would_block_reason,
+            'search_bot_status' => $search_bot_status,
+            'global_blacklist_bypassed' => $global_blacklist_bypassed,
+            'checks' => [
+                'language' => $lang_reason ?: false,
+                'manual_blacklist' => $manual_list_reason ?: false,
+                'geo' => $geo_reason ?: false,
+                'global_blacklist' => $global_list_reason ?: false,
+            ],
+            'proxy' => [
+                'trust_cloudflare' => ! empty( $settings['trust_cloudflare'] ),
+                'remote_addr' => (string) ( $_SERVER['REMOTE_ADDR'] ?? '' ),
+                'cf_connecting_ip' => (string) ( $_SERVER['HTTP_CF_CONNECTING_IP'] ?? '' ),
+                'x_real_ip' => (string) ( $_SERVER['HTTP_X_REAL_IP'] ?? '' ),
+                'x_forwarded_for' => (string) ( $_SERVER['HTTP_X_FORWARDED_FOR'] ?? '' ),
+            ],
+        ];
+
+        if ( $is_admin_debug ) {
+            $payload = array_merge(
+                $base_payload,
+                [
+                    'mode' => 'admin_debug',
+                    'user_agent' => $this->user_agent,
+                    'accept_language' => (string) ( $_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '' ),
+                    'geo_blocking_enabled' => ! empty( $settings['geo_blocking_enabled'] ),
+                    'geo_mode' => (string) ( $settings['geo_mode'] ?? 'block' ),
+                    'geo_allow' => array_values( (array) ( $settings['geo_countries_allow'] ?? [] ) ),
+                    'geo_block' => array_values( (array) ( $settings['geo_countries_block'] ?? [] ) ),
+                    'manual_blacklists_enabled' => ! ( isset( $settings['blacklists_enabled'] ) && (int) $settings['blacklists_enabled'] !== 1 ),
+                    'global_blacklist_enabled' => function_exists( 'rls_is_global_blacklist_runtime_enabled' ) ? rls_is_global_blacklist_runtime_enabled( $settings ) : ! ( isset( $settings['global_blacklist_enabled'] ) && (int) $settings['global_blacklist_enabled'] !== 1 ),
+                    'language_filter_enabled' => ! empty( $settings['language_filter_enabled'] ),
+                    'language_mode' => (string) ( $settings['language_mode'] ?? 'allow' ),
+                    'language_codes' => array_values( (array) ( $settings['language_codes'] ?? [] ) ),
+                ]
+            );
+        } else {
+            $payload = array_merge(
+                $base_payload,
+                [
+                    'mode' => 'public_test',
+                    'geo_mode' => (string) ( $settings['geo_mode'] ?? 'block' ),
+                    'geo_allow_count' => count( (array) ( $settings['geo_countries_allow'] ?? [] ) ),
+                    'geo_block_count' => count( (array) ( $settings['geo_countries_block'] ?? [] ) ),
+                    'language_filter_enabled' => ! empty( $settings['language_filter_enabled'] ),
+                    'language_mode' => (string) ( $settings['language_mode'] ?? 'allow' ),
+                ]
+            );
+        }
+
+        if ( ! headers_sent() ) {
+            header( 'Content-Type: application/json; charset=utf-8' );
+            header( 'Cache-Control: no-store, no-cache, must-revalidate, max-age=0' );
+            header( 'Pragma: no-cache' );
+        }
+        echo wp_json_encode( $payload, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT );
+        exit;
+    }
+
     /**
-     * Полный список плохих ботов из Legacy версии
-     * Вынесен вниз для чистоты кода.
+     * Полный список плохих ботов РёР· Legacy версии
+     * Вынесен РІРЅРёР· для чистоты РєРѕРґР°.
      */
     private function get_bad_bot_signatures() {
         return [

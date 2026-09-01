@@ -63,6 +63,9 @@ class RLS_Activator {
         self::create_database_tables();
         self::setup_options();
         self::schedule_cron_jobs();
+        if ( class_exists( 'RLS_GeoIP' ) ) {
+            RLS_GeoIP::ensure_seed_database();
+        }
         
         // Принудительное обновление сигнатур при активации
         update_option( 'rls_base_signatures', self::BASE_SIGNATURES );
@@ -73,6 +76,8 @@ class RLS_Activator {
                 RLS_API_Client::report_activation();
             }
         }
+
+        set_transient( 'rls_activation_redirect', 1, 120 );
         
         flush_rewrite_rules();
     }
@@ -82,6 +87,10 @@ class RLS_Activator {
             RLS_API_Client::report_deactivation();
         }
         self::clear_cron_jobs();
+
+        if ( get_option( 'rls_wipe_data_on_uninstall', false ) ) {
+            self::purge_plugin_data();
+        }
     }
 
     private static function create_database_tables() {
@@ -125,6 +134,7 @@ class RLS_Activator {
         if ( get_option( 'rls_settings' ) === false ) {
             add_option( 'rls_settings', [
                 'enable_firewall'       => 0,
+                'protection_mode'       => 'full',
                 'disable_xmlrpc'        => 0, 
                 'trust_cloudflare'      => 0, 
                 'enable_login_security' => 0,
@@ -132,9 +142,48 @@ class RLS_Activator {
                 'license_key'           => '',
                 'allow_googlebot'       => 1,
                 'allow_yandexbot'       => 1,
+                'soft_search_bot_mode'  => 1,
+                'allow_mailru_bot'      => 0,
                 'allow_bingbot'         => 0,
+                'allow_duckduckbot'     => 0,
+                'allow_baiduspider'     => 0,
+                'allow_applebot'        => 0,
+                'allow_slurp'           => 0,
+                'allow_seznambot'       => 0,
+                'allow_naverbot'        => 0,
+                'allow_petalbot'        => 0,
+                'allow_sogou'           => 0,
+                'allow_exabot'          => 0,
+                'allow_qwantbot'        => 0,
+                'allow_mojeekbot'       => 0,
+                'allow_gptbot'          => 0,
+                'allow_chatgpt_user'    => 0,
+                'allow_oai_searchbot'   => 0,
+                'allow_claudebot'       => 0,
+                'allow_perplexitybot'   => 0,
+                'allow_cohere_ai'       => 0,
+                'allow_amazonbot'       => 0,
+                'allow_ccbot'           => 0,
+                'allow_bytespider'      => 0,
                 'ssl_verify_api'        => 0,
+                'geo_blocking_enabled'  => 0,
+                'geo_mode'              => 'block',
+                'geo_countries'         => [],
+                'geo_countries_allow'   => [],
+                'geo_countries_block'   => [],
+                'language_filter_enabled' => 0,
+                'language_mode'           => 'allow',
+                'language_codes'          => [ 'ru', 'uk', 'kk' ],
+                'blacklists_enabled'      => 1,
+                'global_blacklist_enabled'=> 0,
+                'captcha_enabled_admin' => 0,
+                'captcha_enabled_users' => 0,
+                'captcha_client_key'    => '',
+                'captcha_server_key'    => '',
             ]);
+        }
+        if ( get_option( 'rls_setup_completed' ) === false ) {
+            add_option( 'rls_setup_completed', 0 );
         }
         
         // 2. Списки IP
@@ -148,6 +197,8 @@ class RLS_Activator {
         }
 
         add_option( 'rls_license_status', '' );
+        add_option( 'rls_license_expires_at', '' );
+        add_option( 'rls_license_max_domains', 0 );
         add_option( 'rls_premium_signatures', [] );
         add_option( 'rls_custom_signatures', [] );
         
@@ -170,5 +221,126 @@ class RLS_Activator {
     private static function clear_cron_jobs() {
         wp_clear_scheduled_hook( 'rls_hourly_event' );
         wp_clear_scheduled_hook( 'rls_daily_event' );
+    }
+
+    public static function purge_plugin_data() {
+        global $wpdb;
+
+        $table_scan = $wpdb->prefix . 'rls_scan_history';
+        $table_log  = $wpdb->prefix . 'rls_attack_log';
+
+        $wpdb->query( "DROP TABLE IF EXISTS $table_scan" );
+        $wpdb->query( "DROP TABLE IF EXISTS $table_log" );
+
+        $options_to_delete = [
+            'rls_settings',
+            'rls_setup_completed',
+            'rls_base_signatures',
+            'rls_premium_signatures',
+            'rls_custom_signatures',
+            'rls_license_status',
+            'rls_license_expires_at',
+            'rls_license_max_domains',
+            'rls_ip2location_db_path',
+            'rls_geo_db_last_update',
+            'rls_stats',
+            'rls_stats_last_sync_snapshot',
+            'rls_ip_whitelist',
+            'rls_manual_blacklist',
+            'rls_global_blacklist',
+            'rls_auto_scan_frequency',
+            'rls_last_auto_scan_timestamp',
+            'rls_activation_report_sent',
+            'rls_activation_redirect',
+            'rls_login_questions',
+            'rls_locked_ips',
+            'rls_bruteforce_lockouts',
+            'rls_blocked_ips',
+            'rls_snapshot_data',
+            'rls_snapshot_time',
+            'rls_comparison_results',
+            'rls_comparison_time',
+            'rls_last_scan_results',
+            'rls_last_scan_time',
+            'rls_whitelist',
+            'rls_firewall_log',
+            'rls_scan_in_progress',
+            'rls_wipe_data_on_uninstall',
+        ];
+
+        foreach ( $options_to_delete as $option ) {
+            delete_option( $option );
+        }
+
+        delete_transient( 'rls_scan_file_list' );
+        delete_transient( 'rls_dirs_to_scan' );
+        delete_transient( 'rls_failed_log' );
+        delete_transient( 'rls_last_pulse_sent' );
+        delete_transient( 'rls_admin_heartbeat_sent' );
+        delete_transient( 'rls_activation_redirect' );
+
+        $wpdb->query(
+            "DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_rls_%' OR option_name LIKE '_transient_timeout_rls_%'"
+        );
+
+        self::delete_geoip_database_file();
+        self::delete_quarantine_directory();
+    }
+
+    private static function delete_geoip_database_file() {
+        $db_path = (string) get_option( 'rls_ip2location_db_path', '' );
+        if ( $db_path === '' || ! file_exists( $db_path ) ) {
+            return;
+        }
+
+        $uploads = wp_upload_dir();
+        $uploads_dir = wp_normalize_path( $uploads['basedir'] ?? '' );
+        $normalized_db_path = wp_normalize_path( $db_path );
+
+        if ( $uploads_dir !== '' && strpos( $normalized_db_path, $uploads_dir ) === 0 ) {
+            @unlink( $normalized_db_path );
+        }
+    }
+
+    private static function delete_quarantine_directory() {
+        $uploads = wp_upload_dir();
+        $base_dir = wp_normalize_path( $uploads['basedir'] ?? '' );
+        if ( $base_dir === '' ) {
+            return;
+        }
+
+        $quarantine_dir = $base_dir . '/rls-quarantine';
+        if ( ! is_dir( $quarantine_dir ) ) {
+            return;
+        }
+
+        self::delete_directory_recursive( $quarantine_dir );
+    }
+
+    private static function delete_directory_recursive( $path ) {
+        $path = wp_normalize_path( $path );
+        if ( ! file_exists( $path ) ) {
+            return;
+        }
+
+        if ( is_file( $path ) || is_link( $path ) ) {
+            @unlink( $path );
+            return;
+        }
+
+        $items = scandir( $path );
+        if ( ! is_array( $items ) ) {
+            return;
+        }
+
+        foreach ( $items as $item ) {
+            if ( $item === '.' || $item === '..' ) {
+                continue;
+            }
+
+            self::delete_directory_recursive( $path . '/' . $item );
+        }
+
+        @rmdir( $path );
     }
 }

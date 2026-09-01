@@ -1,8 +1,8 @@
 <?php
 /**
- * Класс RLS_Admin_Pages
- * Управляет административными страницами, меню, сохранением настроек и AJAX-запросами.
- * Версия 1.6.0 (Complete: Quarantine Init included)
+ * пїЅпїЅпїЅпїЅпїЅ RLS_Admin_Pages
+ * пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ AJAX-пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ.
+ * пїЅпїЅпїЅпїЅпїЅпїЅ 1.6.0 (Complete: Quarantine Init included)
  *
  * @package RybinskLabSecurity
  */
@@ -14,59 +14,64 @@ if ( ! defined( 'WPINC' ) ) {
 class RLS_Admin_Pages {
 
     /**
-     * Инициализация всех хуков админки.
+     * пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ.
      */
     public function init() {
-        // Регистрация меню и страниц
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         add_action( 'admin_menu', [ $this, 'setup_admin_menu' ] );
         
-        // Подключение стилей и скриптов
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_admin_assets' ] );
         
-        // Регистрация настроек в базе данных
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
         add_action( 'admin_init', [ $this, 'initialize_settings' ] );
+        add_action( 'admin_init', [ $this, 'maybe_redirect_after_activation' ] );
         
-        // Отправка сигнала "Я жив" при посещении админки
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ "пїЅ пїЅпїЅпїЅ" пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         add_action( 'admin_init', [ $this, 'check_and_send_heartbeat_on_visit' ] );
         
-        // Проверка наличия базовых сигнатур (самовосстановление)
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ)
         add_action( 'admin_init', [ $this, 'check_and_fix_base_signatures' ] );
 
-        // Вывод HTML модального окна деактивации (в футер админки)
+        // пїЅпїЅпїЅпїЅпїЅ HTML пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ (пїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ)
         add_action( 'admin_footer', [ $this, 'render_deactivation_modal' ] );
 
-        // ИНИЦИАЛИЗАЦИЯ КАРАНТИНА (НОВОЕ)
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅпїЅпїЅ)
         if ( class_exists( 'RLS_Quarantine' ) ) {
             $quarantine = new RLS_Quarantine();
             $quarantine->init();
         }
 
-        // --- AJAX ОБРАБОТЧИКИ ---
+        // --- AJAX пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ ---
 
-        // Сохранение предпочтений при удалении
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         add_action( 'wp_ajax_rls_save_uninstall_pref', [ $this, 'ajax_save_uninstall_pref' ] );
+        add_action( 'wp_ajax_rls_save_license_key', [ $this, 'ajax_save_license_key' ] );
+        add_action( 'wp_ajax_rls_delete_license_key', [ $this, 'ajax_delete_license_key' ] );
 
-        // Управление списками IP
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ IP
         add_action( 'wp_ajax_rls_add_ip_list', [ $this, 'ajax_add_ip_list' ] );
         add_action( 'wp_ajax_rls_delete_ip_list', [ $this, 'ajax_delete_ip_list' ] );
+        add_action( 'wp_ajax_rls_unblock_ip', [ $this, 'ajax_unblock_ip' ] );
 
-        // Управление сигнатурами
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         add_action( 'wp_ajax_rls_add_signature', [ $this, 'ajax_add_signature' ] );
         add_action( 'wp_ajax_rls_delete_signature', [ $this, 'ajax_delete_signature' ] );
         
-        // Управление вопросами входа
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
         add_action( 'wp_ajax_rls_add_login_question', [ $this, 'ajax_add_login_question' ] );
         add_action( 'wp_ajax_rls_delete_login_question', [ $this, 'ajax_delete_login_question' ] );
         
-        // AI Анализ и лечение (С проверкой размера и чексумм)
+        // AI пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ (пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ)
         add_action( 'wp_ajax_rls_neutralize_file', [ $this, 'ajax_neutralize_file' ] );
         
-        // Синхронизация статистики
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         add_action( 'wp_ajax_rls_sync_stats', [ $this, 'ajax_sync_stats' ] );
+        add_action( 'wp_ajax_rls_clear_attack_logs', [ $this, 'ajax_clear_attack_logs' ] );
     }
     
     /**
-     * Отправка Heartbeat при посещении страниц плагина.
+     * пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ Heartbeat пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ.
      */
     public function check_and_send_heartbeat_on_visit() {
         if ( isset( $_GET['page'] ) && strpos( $_GET['page'], 'rls-' ) === 0 ) {
@@ -74,14 +79,14 @@ class RLS_Admin_Pages {
             if ( ! $last_admin_ping ) {
                 if ( class_exists( 'RLS_API_Client' ) ) {
                     RLS_API_Client::send_heartbeat(); 
-                    set_transient( 'rls_admin_heartbeat_sent', 1, 300 ); // 300 сек = 5 мин
+                    set_transient( 'rls_admin_heartbeat_sent', 1, 300 ); // 300 пїЅпїЅпїЅ = 5 пїЅпїЅпїЅ
                 }
             }
         }
     }
     
     /**
-     * Гарантирует наличие базовых сигнатур.
+     * пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ.
      */
     public function check_and_fix_base_signatures() {
         $current_base = get_option( 'rls_base_signatures', [] );
@@ -93,7 +98,7 @@ class RLS_Admin_Pages {
     }
 
     /**
-     * Создание пунктов меню в админке.
+     * пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ.
      */
     public function setup_admin_menu() {
         add_menu_page( 
@@ -114,7 +119,52 @@ class RLS_Admin_Pages {
             'rls-scanner', 
             [ $this, 'render_scanner_page' ] 
         );
-        
+
+        add_submenu_page(
+            'rls-scanner',
+            'Лицензия',
+            'Лицензия',
+            'manage_options',
+            'rls-license',
+            [ $this, 'render_license_page' ]
+        );
+
+        add_submenu_page(
+            'rls-scanner',
+            'Режим защиты',
+            'Режим защиты',
+            'manage_options',
+            'rls-protection-mode',
+            [ $this, 'render_protection_mode_page' ]
+        );
+
+        add_submenu_page(
+            'rls-scanner',
+            'Фаервол',
+            'Фаервол',
+            'manage_options',
+            'rls-firewall',
+            [ $this, 'render_firewall_page' ]
+        );
+
+        add_submenu_page(
+            'rls-scanner',
+            'Черный список',
+            'Черный список',
+            'manage_options',
+            'rls-blacklist',
+            [ $this, 'render_blacklist_page' ]
+        );
+
+        add_submenu_page(
+            'rls-scanner',
+            'Защита входа',
+            'Защита входа',
+            'manage_options',
+            'rls-login-security',
+            [ $this, 'render_login_security_page' ]
+        );
+
         add_submenu_page( 
             'rls-scanner', 
             'Настройки', 
@@ -123,21 +173,33 @@ class RLS_Admin_Pages {
             'rls-settings', 
             [ $this, 'render_settings_page' ] 
         );
+
+        add_submenu_page(
+            'rls-scanner',
+            'Условия и политика',
+            'Условия и политика',
+            'manage_options',
+            'rls-policy',
+            [ $this, 'render_policy_page' ]
+        );
     }
     
     /**
-     * Подключение CSS и JS файлов.
+     * пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ CSS пїЅ JS пїЅпїЅпїЅпїЅпїЅпїЅ.
      */
     public function enqueue_admin_assets( $hook_suffix ) {
-        // Подключаем стили и скрипты только на страницах плагина И на странице списка плагинов (для модалки)
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ)
         if ( strpos( $hook_suffix, 'rls-' ) === false && $hook_suffix !== 'plugins.php' ) {
             return;
         }
+
+        $is_settings_screen = ( strpos( $hook_suffix, 'rls-' ) !== false && strpos( $hook_suffix, 'rls-scanner' ) === false ) || $hook_suffix === 'plugins.php';
+        $is_scanner_screen  = strpos( $hook_suffix, 'rls-scanner' ) !== false;
         
         wp_enqueue_style( 'rls-admin-styles', plugin_dir_url( RLS_PLUGIN_FILE ) . 'assets/css/admin.css', [], RLS_VERSION );
 
-        // Скрипт для админки (Настройки + Модальное окно)
-        if ( $hook_suffix === 'rl-security_page_rls-settings' || $hook_suffix === 'plugins.php' ) {
+        // пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ + пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ)
+        if ( $is_settings_screen ) {
             wp_enqueue_script( 'rls-admin-script', plugin_dir_url( RLS_PLUGIN_FILE ) . 'assets/js/admin.js', [ 'jquery' ], RLS_VERSION, true );
             wp_localize_script( 'rls-admin-script', 'rls_admin_data', [
                 'ajax_url'         => admin_url( 'admin-ajax.php' ), 
@@ -148,8 +210,8 @@ class RLS_Admin_Pages {
             ]);
         }
         
-        // Скрипт для сканера
-        if ( $hook_suffix === 'toplevel_page_rls-scanner' || $hook_suffix === 'rl-security_page_rls-scanner' ) {
+        // пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+        if ( $is_scanner_screen ) {
             wp_enqueue_script( 'rls-scanner-script', plugin_dir_url( RLS_PLUGIN_FILE ) . 'assets/js/scanner.js', [ 'jquery' ], RLS_VERSION, true );
             wp_localize_script( 'rls-scanner-script', 'rls_scanner_data', [
                 'ajax_url'        => admin_url( 'admin-ajax.php' ),
@@ -159,19 +221,77 @@ class RLS_Admin_Pages {
         }
     }
     
-    // Рендер страниц
+    // пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     public function render_scanner_page() {
         require_once RLS_PLUGIN_PATH . 'includes/admin/views/scanner-page.php'; 
     }
-    
+
+    private function render_settings_section_page( $section, $tab = '' ) {
+        global $rls_settings_section, $rls_settings_initial_tab;
+
+        $rls_settings_section = $section;
+        $rls_settings_initial_tab = $tab;
+
+        require RLS_PLUGIN_PATH . 'includes/admin/views/settings-page.php';
+
+        unset( $rls_settings_section, $rls_settings_initial_tab );
+    }
+
+    public function render_license_page() {
+        $this->render_settings_section_page( 'license', 'tab-general' );
+    }
+
+    public function render_protection_mode_page() {
+        $this->render_settings_section_page( 'protection-mode', 'tab-general' );
+    }
+
+    public function render_firewall_page() {
+        $this->render_settings_section_page( 'firewall', 'tab-firewall' );
+    }
+
+    public function render_blacklist_page() {
+        $this->render_settings_section_page( 'blacklist', 'tab-lists' );
+    }
+
+    public function render_login_security_page() {
+        $this->render_settings_section_page( 'login-security', 'tab-general' );
+    }
+
     public function render_settings_page() {
-        require_once RLS_PLUGIN_PATH . 'includes/admin/views/settings-page.php'; 
+        $this->render_settings_section_page( 'settings', 'tab-scanner' );
+    }
+
+    public function render_policy_page() {
+        require_once RLS_PLUGIN_PATH . 'includes/admin/views/policy-page.php';
+    }
+
+    public function maybe_redirect_after_activation() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            return;
+        }
+
+        if ( wp_doing_ajax() || is_network_admin() ) {
+            return;
+        }
+
+        if ( ! get_transient( 'rls_activation_redirect' ) ) {
+            return;
+        }
+
+        delete_transient( 'rls_activation_redirect' );
+
+        if ( isset( $_GET['activate-multi'] ) ) {
+            return;
+        }
+
+        wp_safe_redirect( admin_url( 'admin.php?page=rls-protection-mode&rls-setup=1' ) );
+        exit;
     }
 
     /**
-     * Рендер HTML кода модального окна деактивации.
+     * пїЅпїЅпїЅпїЅпїЅпїЅ HTML пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ.
      */
-    public function render_deactivation_modal() {
+        public function render_deactivation_modal() {
         $screen = get_current_screen();
         if ( ! $screen || $screen->id !== 'plugins' ) {
             return;
@@ -183,126 +303,317 @@ class RLS_Admin_Pages {
                 <div id="rls-step-1">
                     <div class="rls-modal-header">
                         <span class="dashicons dashicons-shield-alt" style="color:#2271b1; font-size:40px; width:40px; height:40px;"></span>
-                        <h2 style="margin:0; margin-left:15px;">Приостановить защиту?</h2>
+                        <h2 style="margin:0; margin-left:15px;">Точно отключить защиту сайта?</h2>
                     </div>
-                    <p style="font-size:14px; color:#555; margin-bottom:20px;">Вы деактивируете плагин <strong>Rybinsk Lab Security</strong>. Сайт останется без защиты.</p>
-                    
-                    <div class="rls-options">
-                        <label class="rls-opt">
-                            <input type="radio" name="rls_wipe_choice" value="keep" checked>
-                            <div>
-                                <strong>Временно (Сохранить настройки)</strong>
-                                <span class="desc">Я вернусь позже. Сохранить лицензию, журнал атак, белый список и снимки файлов.</span>
-                            </div>
-                        </label>
-                        <label class="rls-opt warning">
-                            <input type="radio" name="rls_wipe_choice" value="wipe">
-                            <div>
-                                <strong>Удалить полностью</strong>
-                                <span class="desc">Стереть все данные, включая лицензию и историю проверок. Это действие необратимо.</span>
-                            </div>
-                        </label>
+                    <p style="font-size:14px; color:#555; margin-bottom:20px;">Если отключить <strong>Rybinsk Lab Security</strong>, сайт останется без активного WAF, защиты входа и других защитных модулей. Вы уверены, что хотите оставить сайт без защиты?</p>
+                    <div style="padding:12px 14px; border:1px solid #f0c36d; background:#fff8e5; border-radius:8px; margin-bottom:20px; color:#7a4b00;">
+                        Если передумаете, нажмите «Нет, оставить защиту» и плагин продолжит работать без изменений.
                     </div>
 
                     <div class="rls-modal-footer">
-                        <button class="button button-large rls-cancel-btn">Отмена</button>
-                        <button class="button button-primary button-large rls-next-btn">Продолжить</button>
+                        <button class="button button-large rls-cancel-btn">Нет, оставить защиту</button>
+                        <button class="button button-primary button-large rls-next-btn">Да, отключить</button>
                     </div>
                 </div>
 
                 <div id="rls-step-2" style="display:none;">
                     <div class="rls-modal-header">
-                        <span class="dashicons dashicons-heart" style="color:#d63638; font-size:40px; width:40px; height:40px;"></span>
-                        <h2 style="margin:0; margin-left:15px;">Подождите, не уходите!</h2>
+                        <span class="dashicons dashicons-database-remove" style="color:#d63638; font-size:40px; width:40px; height:40px;"></span>
+                        <h2 style="margin:0; margin-left:15px;">Что делать с данными плагина?</h2>
                     </div>
-                    <p style="margin-top:15px; font-size:14px;">Если причина удаления — стоимость или проблемы с настройкой, давайте это обсудим.</p>
-                    
-                    <div class="rls-offer-box">
-                        <p style="margin-bottom:10px;"><strong>Нужен Premium бесплатно?</strong></p>
-                        <p>Напишите мне лично в Telegram. Я могу выдать вам <strong>ключ на 1 месяц бесплатно</strong>, чтобы вы оценили полный функционал.</p>
-                        <a href="https://t.me/ukiterus" target="_blank" class="button button-primary rls-tg-btn">
-                            <span class="dashicons dashicons-location-alt"></span> Написать @ukiterus
-                        </a>
+                    <p style="margin-top:15px; font-size:14px;">Выберите, нужно ли очистить настройки, лицензию, карантин, журналы и локальные данные или оставить их для возможного возврата.</p>
+
+                    <div class="rls-options">
+                        <label class="rls-opt">
+                            <input type="radio" name="rls_wipe_choice" value="keep" checked>
+                            <div>
+                                <strong>Оставить данные в памяти (рекомендуется)</strong>
+                                <span class="desc">Сохранятся лицензия, настройки, карантин, журналы и другие локальные данные. Это удобно, если вы планируете включить плагин снова.</span>
+                            </div>
+                        </label>
+                        <label class="rls-opt warning">
+                            <input type="radio" name="rls_wipe_choice" value="wipe">
+                            <div>
+                                <strong>Очистить все данные плагина</strong>
+                                <span class="desc">Будут удалены настройки, лицензия, карантин, GeoIP-база и журналы. После повторной активации плагин начнет работу как после первой установки.</span>
+                            </div>
+                        </label>
                     </div>
 
                     <div class="rls-modal-footer">
-                        <button class="button button-large rls-cancel-btn">Я остаюсь</button>
-                        <button class="button button-link-delete rls-final-deactivate-btn" style="color:#a00;">Всё равно удалить данные и деактивировать</button>
+                        <button class="button button-large rls-back-btn">Назад</button>
+                        <button class="button button-link-delete rls-final-deactivate-btn" style="color:#a00;">Отключить плагин</button>
                     </div>
                 </div>
             </div>
         </div>
         <?php
     }
-    
-    /**
-     * Регистрация настроек.
-     */
+
     public function initialize_settings() { 
         register_setting( 'rls_settings_group', 'rls_settings', [ $this, 'sanitize_settings_array' ] );
         register_setting( 'rls_settings_group', 'rls_auto_scan_frequency', [ 'sanitize_callback' => 'sanitize_text_field' ] );
     }
     
     /**
-     * Очистка настроек.
+     * пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ.
      */
     public function sanitize_settings_array( $input ) {
         $old_settings = get_option( 'rls_settings', [] );
         $sanitized_input = $old_settings;
+
+        $protection_mode = sanitize_key( (string) ( $input['protection_mode'] ?? ( $old_settings['protection_mode'] ?? 'full' ) ) );
+        $sanitized_input['protection_mode'] = in_array( $protection_mode, [ 'light', 'full', 'scanner_only' ], true ) ? $protection_mode : 'full';
         
         $sanitized_input['enable_firewall'] = ( isset( $input['enable_firewall'] ) && $input['enable_firewall'] == 1 ) ? 1 : 0;
         $sanitized_input['disable_xmlrpc'] = ( isset( $input['disable_xmlrpc'] ) && $input['disable_xmlrpc'] == 1 ) ? 1 : 0;
         $sanitized_input['trust_cloudflare'] = ( isset( $input['trust_cloudflare'] ) && $input['trust_cloudflare'] == 1 ) ? 1 : 0;
         $sanitized_input['enable_login_security'] = ( isset( $input['enable_login_security'] ) && $input['enable_login_security'] == 1 ) ? 1 : 0;
+        $sanitized_input['blacklists_enabled'] = ( isset( $input['blacklists_enabled'] ) && $input['blacklists_enabled'] == 1 ) ? 1 : 0;
+        $is_premium = function_exists( 'rls_is_premium_license_active' ) && rls_is_premium_license_active();
+        if ( $is_premium && $sanitized_input['protection_mode'] === 'light' ) {
+            $sanitized_input['global_blacklist_enabled'] = ( isset( $input['global_blacklist_enabled'] ) && $input['global_blacklist_enabled'] == 1 ) ? 1 : 0;
+        } else {
+            $sanitized_input['global_blacklist_enabled'] = 0;
+        }
         
         if ( isset( $input['login_questions_count'] ) ) { 
-            $sanitized_input['login_questions_count'] = intval( $input['login_questions_count'] ); 
+            $sanitized_input['login_questions_count'] = max( 1, min( 3, intval( $input['login_questions_count'] ) ) ); 
         }
         
         if ( isset( $input['license_key'] ) ) { 
             $sanitized_input['license_key'] = sanitize_text_field( strtoupper( trim( $input['license_key'] ) ) ); 
+
+            $old_license_key = (string) ( $old_settings['license_key'] ?? '' );
+            if ( $sanitized_input['license_key'] !== $old_license_key ) {
+                rls_store_license_meta( '' );
+                update_option( 'rls_premium_signatures', [] );
+            }
         }
         
         $sanitized_input['allow_googlebot'] = ( isset( $input['allow_googlebot'] ) && $input['allow_googlebot'] == 1 ) ? 1 : 0;
         $sanitized_input['allow_yandexbot'] = ( isset( $input['allow_yandexbot'] ) && $input['allow_yandexbot'] == 1 ) ? 1 : 0;
+        $sanitized_input['soft_search_bot_mode'] = ( isset( $input['soft_search_bot_mode'] ) && $input['soft_search_bot_mode'] == 1 ) ? 1 : 0;
+        $sanitized_input['allow_mailru_bot'] = ( isset( $input['allow_mailru_bot'] ) && $input['allow_mailru_bot'] == 1 ) ? 1 : 0;
         $sanitized_input['allow_bingbot']   = ( isset( $input['allow_bingbot'] ) && $input['allow_bingbot'] == 1 ) ? 1 : 0;
+        $sanitized_input['allow_duckduckbot']   = ( isset( $input['allow_duckduckbot'] ) && $input['allow_duckduckbot'] == 1 ) ? 1 : 0;
+        $sanitized_input['allow_baiduspider']   = ( isset( $input['allow_baiduspider'] ) && $input['allow_baiduspider'] == 1 ) ? 1 : 0;
+        $sanitized_input['allow_applebot']      = ( isset( $input['allow_applebot'] ) && $input['allow_applebot'] == 1 ) ? 1 : 0;
+        $sanitized_input['allow_slurp']         = ( isset( $input['allow_slurp'] ) && $input['allow_slurp'] == 1 ) ? 1 : 0;
+        $sanitized_input['allow_seznambot']     = ( isset( $input['allow_seznambot'] ) && $input['allow_seznambot'] == 1 ) ? 1 : 0;
+        $sanitized_input['allow_naverbot']      = ( isset( $input['allow_naverbot'] ) && $input['allow_naverbot'] == 1 ) ? 1 : 0;
+        $sanitized_input['allow_petalbot']      = ( isset( $input['allow_petalbot'] ) && $input['allow_petalbot'] == 1 ) ? 1 : 0;
+        $sanitized_input['allow_sogou']         = ( isset( $input['allow_sogou'] ) && $input['allow_sogou'] == 1 ) ? 1 : 0;
+        $sanitized_input['allow_exabot']        = ( isset( $input['allow_exabot'] ) && $input['allow_exabot'] == 1 ) ? 1 : 0;
+        $sanitized_input['allow_qwantbot']      = ( isset( $input['allow_qwantbot'] ) && $input['allow_qwantbot'] == 1 ) ? 1 : 0;
+        $sanitized_input['allow_mojeekbot']     = ( isset( $input['allow_mojeekbot'] ) && $input['allow_mojeekbot'] == 1 ) ? 1 : 0;
+        $sanitized_input['allow_gptbot']        = ( isset( $input['allow_gptbot'] ) && $input['allow_gptbot'] == 1 ) ? 1 : 0;
+        $sanitized_input['allow_chatgpt_user']  = ( isset( $input['allow_chatgpt_user'] ) && $input['allow_chatgpt_user'] == 1 ) ? 1 : 0;
+        $sanitized_input['allow_oai_searchbot'] = ( isset( $input['allow_oai_searchbot'] ) && $input['allow_oai_searchbot'] == 1 ) ? 1 : 0;
+        $sanitized_input['allow_claudebot']     = ( isset( $input['allow_claudebot'] ) && $input['allow_claudebot'] == 1 ) ? 1 : 0;
+        $sanitized_input['allow_perplexitybot'] = ( isset( $input['allow_perplexitybot'] ) && $input['allow_perplexitybot'] == 1 ) ? 1 : 0;
+        $sanitized_input['allow_cohere_ai']     = ( isset( $input['allow_cohere_ai'] ) && $input['allow_cohere_ai'] == 1 ) ? 1 : 0;
+        $sanitized_input['allow_amazonbot']     = ( isset( $input['allow_amazonbot'] ) && $input['allow_amazonbot'] == 1 ) ? 1 : 0;
+        $sanitized_input['allow_ccbot']         = ( isset( $input['allow_ccbot'] ) && $input['allow_ccbot'] == 1 ) ? 1 : 0;
+        $sanitized_input['allow_bytespider']    = ( isset( $input['allow_bytespider'] ) && $input['allow_bytespider'] == 1 ) ? 1 : 0;
 
         if ( isset( $input['ssl_verify_api'] ) ) {
             $sanitized_input['ssl_verify_api'] = ( $input['ssl_verify_api'] == 1 ) ? 1 : 0;
+        }
+        $sanitized_input['captcha_enabled_admin'] = ( isset( $input['captcha_enabled_admin'] ) && $input['captcha_enabled_admin'] == 1 ) ? 1 : 0;
+        $sanitized_input['captcha_enabled_users'] = ( isset( $input['captcha_enabled_users'] ) && $input['captcha_enabled_users'] == 1 ) ? 1 : 0;
+        if ( isset( $input['captcha_client_key'] ) ) {
+            $sanitized_input['captcha_client_key'] = sanitize_text_field( trim( $input['captcha_client_key'] ) );
+        }
+        if ( isset( $input['captcha_server_key'] ) ) {
+            $sanitized_input['captcha_server_key'] = sanitize_text_field( trim( $input['captcha_server_key'] ) );
+        }
+
+        $is_premium = ( get_option( 'rls_license_status' ) === 'valid' );
+        $sanitized_input['language_filter_enabled'] = ( isset( $input['language_filter_enabled'] ) && $input['language_filter_enabled'] == 1 ) ? 1 : 0;
+        if ( isset( $input['language_mode'] ) ) {
+            $language_mode = sanitize_text_field( $input['language_mode'] );
+            $sanitized_input['language_mode'] = in_array( $language_mode, [ 'allow', 'block' ], true ) ? $language_mode : 'allow';
+        }
+        if ( isset( $input['language_codes'] ) ) {
+            $raw = is_array( $input['language_codes'] ) ? $input['language_codes'] : explode( ',', (string) $input['language_codes'] );
+            $codes = [];
+            foreach ( $raw as $code ) {
+                $lang = strtolower( preg_replace( '/[^a-z]/i', '', (string) $code ) );
+                if ( preg_match( '/^[a-z]{2,3}$/', $lang ) ) {
+                    $codes[] = $lang;
+                }
+            }
+            $sanitized_input['language_codes'] = array_values( array_unique( $codes ) );
+        }
+
+        $sanitized_input['geo_blocking_enabled'] = ( isset( $input['geo_blocking_enabled'] ) && $input['geo_blocking_enabled'] == 1 ) ? 1 : 0;
+        if ( isset( $input['geo_mode'] ) ) {
+            $mode = sanitize_text_field( $input['geo_mode'] );
+            $sanitized_input['geo_mode'] = in_array( $mode, [ 'allow', 'block' ], true ) ? $mode : 'block';
+        }
+        if ( isset( $input['geo_countries'] ) ) {
+            $raw = is_array( $input['geo_countries'] ) ? $input['geo_countries'] : explode( ',', (string) $input['geo_countries'] );
+            $countries = [];
+            foreach ( $raw as $country ) {
+                $code = strtoupper( preg_replace( '/[^A-Z]/i', '', (string) $country ) );
+                if ( preg_match( '/^[A-Z]{2}$/', $code ) ) {
+                    $countries[] = $code;
+                }
+            }
+            $sanitized_input['geo_countries'] = array_values( array_unique( $countries ) );
+        }
+        if ( isset( $input['geo_countries_allow'] ) ) {
+            $raw = is_array( $input['geo_countries_allow'] ) ? $input['geo_countries_allow'] : explode( ',', (string) $input['geo_countries_allow'] );
+            $countries = [];
+            foreach ( $raw as $country ) {
+                $code = strtoupper( preg_replace( '/[^A-Z]/i', '', (string) $country ) );
+                if ( preg_match( '/^[A-Z]{2}$/', $code ) ) {
+                    $countries[] = $code;
+                }
+            }
+            $countries = array_values( array_unique( $countries ) );
+            if ( ! $is_premium ) {
+                $countries = array_slice( $countries, 0, 3 );
+            }
+            $sanitized_input['geo_countries_allow'] = $countries;
+        }
+        if ( isset( $input['geo_countries_block'] ) ) {
+            $raw = is_array( $input['geo_countries_block'] ) ? $input['geo_countries_block'] : explode( ',', (string) $input['geo_countries_block'] );
+            $countries = [];
+            foreach ( $raw as $country ) {
+                $code = strtoupper( preg_replace( '/[^A-Z]/i', '', (string) $country ) );
+                if ( preg_match( '/^[A-Z]{2}$/', $code ) ) {
+                    $countries[] = $code;
+                }
+            }
+            $countries = array_values( array_unique( $countries ) );
+            if ( ! $is_premium ) {
+                $countries = array_slice( $countries, 0, 5 );
+            }
+            $sanitized_input['geo_countries_block'] = $countries;
+        }
+
+        // Backward-compat поле синхронизируем с актуальными списками,
+        // чтобы поведение GeoIP было предсказуемым при миграции настроек.
+        $allow_sync = array_values( (array) ( $sanitized_input['geo_countries_allow'] ?? [] ) );
+        $block_sync = array_values( (array) ( $sanitized_input['geo_countries_block'] ?? [] ) );
+        $sanitized_input['geo_countries'] = array_values( array_unique( array_merge( $allow_sync, $block_sync ) ) );
+
+        if ( isset( $input['rls_setup_completed'] ) && (int) $input['rls_setup_completed'] === 1 ) {
+            update_option( 'rls_setup_completed', 1 );
         }
 
         return $sanitized_input;
     }
 
-    // --- AJAX ОБРАБОТЧИКИ ---
+    // --- AJAX пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ ---
 
     public function ajax_save_uninstall_pref() {
         if ( ! current_user_can( 'activate_plugins' ) ) wp_send_json_error();
-        
+        if ( ! check_ajax_referer( 'rls_settings_nonce', 'nonce', false ) ) wp_send_json_error();
+
         $wipe = ( isset($_POST['wipe']) && $_POST['wipe'] === 'true' );
         update_option( 'rls_wipe_data_on_uninstall', $wipe );
-        
-        if ( $wipe && class_exists('RLS_API_Client') ) {
-            RLS_API_Client::report_deactivation();
-        }
         wp_send_json_success();
     }
 
-    // --- АНАЛИЗ ФАЙЛА (AI + CHECKSUMS + SIZE CHECK) ---
+    public function ajax_save_license_key() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Доступ запрещен.' );
+        }
+        if ( ! check_ajax_referer( 'rls_settings_nonce', 'nonce', false ) ) {
+            wp_send_json_error( 'Ошибка безопасности.' );
+        }
+
+        $license_key = sanitize_text_field( strtoupper( trim( (string) ( $_POST['license_key'] ?? '' ) ) ) );
+        $settings = get_option( 'rls_settings', [] );
+        $settings['license_key'] = $license_key;
+        update_option( 'rls_settings', $settings );
+
+        if ( $license_key === '' ) {
+            rls_store_license_meta( 'invalid' );
+            update_option( 'rls_premium_signatures', [] );
+            wp_send_json_success( [
+                'status' => 'cleared',
+                'license_ui' => function_exists( 'rls_get_license_ui_state' ) ? rls_get_license_ui_state() : [],
+            ] );
+        }
+
+        if ( ! class_exists( 'RLS_API_Client' ) ) {
+            wp_send_json_error( 'API недоступно.' );
+        }
+
+        $validation = RLS_API_Client::validate_license_key( $license_key );
+        if ( is_array( $validation ) && ( $validation['status'] ?? '' ) === 'success' ) {
+            rls_store_license_meta( 'valid', (array) ( $validation['data'] ?? [] ) );
+
+            $sig_res = RLS_API_Client::get_signatures( $license_key );
+            if ( is_array( $sig_res ) && ( $sig_res['status'] ?? '' ) === 'success' ) {
+                if ( isset( $sig_res['data']['signatures'] ) ) {
+                    update_option( 'rls_premium_signatures', $sig_res['data']['signatures'], false );
+                }
+            }
+
+            $ip_res = RLS_API_Client::get_global_blacklist();
+            if ( is_array( $ip_res ) && ( $ip_res['status'] ?? '' ) === 'success' && ! empty( $ip_res['data']['ips'] ) ) {
+                update_option( 'rls_global_blacklist', $ip_res['data']['ips'], false );
+            }
+
+            wp_send_json_success( [
+                'status' => 'valid',
+                'license_ui' => function_exists( 'rls_get_license_ui_state' ) ? rls_get_license_ui_state() : [],
+            ] );
+        }
+
+        rls_store_license_meta( 'invalid' );
+        update_option( 'rls_premium_signatures', [] );
+
+        $message = 'Ключ недействителен или срок действия истек.';
+        if ( is_wp_error( $validation ) ) {
+            $message = $validation->get_error_message();
+        } elseif ( is_array( $validation ) && ! empty( $validation['message'] ) ) {
+            $message = (string) $validation['message'];
+        }
+
+        wp_send_json_error( $message );
+    }
+
+    public function ajax_delete_license_key() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Доступ запрещен.' );
+        }
+        if ( ! check_ajax_referer( 'rls_settings_nonce', 'nonce', false ) ) {
+            wp_send_json_error( 'Ошибка безопасности.' );
+        }
+
+        $settings = get_option( 'rls_settings', [] );
+        $settings['license_key'] = '';
+        update_option( 'rls_settings', $settings );
+        rls_store_license_meta( 'invalid' );
+        update_option( 'rls_premium_signatures', [] );
+
+        wp_send_json_success( [
+            'status' => 'cleared',
+            'license_ui' => function_exists( 'rls_get_license_ui_state' ) ? rls_get_license_ui_state() : [],
+        ] );
+    }
+
+    // --- пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ (AI + CHECKSUMS + SIZE CHECK) ---
     public function ajax_neutralize_file() {
         check_ajax_referer('rls_scanner_nonce', 'nonce'); 
-        if (!current_user_can('manage_options')) wp_send_json_error('Нет прав.');
+        if (!current_user_can('manage_options')) wp_send_json_error('Доступ запрещен.');
         
-        // ВАЖНО: Используем wp_normalize_path для согласованности путей
+        // пїЅпїЅпїЅпїЅпїЅ: пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ wp_normalize_path пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
         $filepath = wp_normalize_path( trim(stripslashes($_POST['filepath'] ?? '')) ); 
         $signature = trim(stripslashes($_POST['signature'] ?? ''));
         
         if (empty($filepath) || !file_exists($filepath) || !is_readable($filepath)) wp_send_json_error('Файл недоступен.');
         
-        // 1. ПРОВЕРКА ЦЕЛОСТНОСТИ ЯДРА WP
+        // 1. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ WP
         require_once( ABSPATH . 'wp-admin/includes/update.php' );
         
-        // Получаем относительный путь (от корня WP)
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ (пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ WP)
         $relative = str_replace( wp_normalize_path(ABSPATH), '', $filepath );
         
         global $wp_version;
@@ -316,19 +627,19 @@ class RLS_Admin_Pages {
             }
         }
 
-        // 2. ПРОВЕРКА РАЗМЕРА ФАЙЛА
+        // 2. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
         $filesize = @filesize($filepath);
-        if ( $filesize > 102400 ) { // > 100 КБ
-            wp_send_json_success(['result' => 'too_large']);
-            return;
+        $max_ai_bytes = 204800;
+        if ( class_exists( 'RLS_API_Client' ) && method_exists( 'RLS_API_Client', 'get_ai_snippet_limit_bytes' ) ) {
+            $max_ai_bytes = (int) RLS_API_Client::get_ai_snippet_limit_bytes();
         }
 
-        // 3. ПОДГОТОВКА СНИППЕТА
+        // 3. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         $lines = file($filepath, FILE_IGNORE_NEW_LINES); 
         $snip = "";
         $found_sig = false;
 
-        // Если сигнатура есть, пытаемся найти контекст
+        // пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         if ( !empty($signature) ) {
             foreach($lines as $k=>$l) {
                 if(strpos($l, $signature) !== false) { 
@@ -341,15 +652,23 @@ class RLS_Admin_Pages {
             }
         }
         
-        // Если сигнатура не найдена (например, измененный файл), берем начало
+        // пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ), пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
         if ( !$found_sig ) {
             $content = file_get_contents($filepath);
-            $snip = substr($content, 0, 1500); 
+            if ( $max_ai_bytes > 0 && strlen( $content ) > $max_ai_bytes ) {
+                $head_bytes = max( 1, (int) floor( $max_ai_bytes / 2 ) );
+                $tail_bytes = max( 1, $max_ai_bytes - $head_bytes );
+                $head = substr( $content, 0, $head_bytes );
+                $tail = substr( $content, -$tail_bytes );
+                $snip = $head . "\n...\n" . $tail;
+            } else {
+                $snip = $content;
+            }
         }
         
-        if(!$snip) wp_send_json_error('Не удалось прочитать файл.');
+        if(!$snip) wp_send_json_error('Не удалось подготовить фрагмент кода.');
         
-        // 4. ОТПРАВКА В AI
+        // 4. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ AI
         if ( class_exists('RLS_API_Client') ) {
             $ai = RLS_API_Client::analyze_code_snippet($snip);
             
@@ -361,29 +680,32 @@ class RLS_Admin_Pages {
                     wp_send_json_success(['result' => 'ai_legitimate']); 
                 }
             } else {
-                wp_send_json_error('Ошибка ответа AI');
+                wp_send_json_error('Не удалось выполнить AI-анализ.');
             }
         } else {
-            wp_send_json_error('API недоступен');
+            wp_send_json_error('API недоступно.');
         }
     }
 
     private function add_to_whitelist( $filepath ) {
-        // Нормализация пути при сохранении
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         $filepath = wp_normalize_path( $filepath );
         $w = get_option('rls_whitelist', []); 
-        $w[$filepath] = md5_file($filepath); 
+        $w[$filepath] = [
+            'hash'  => md5_file($filepath),
+            'mtime' => (int) @filemtime($filepath),
+        ];
         update_option('rls_whitelist', $w, false); 
     }
 
     public function ajax_add_ip_list() {
         check_ajax_referer( 'rls_settings_nonce', 'nonce' );
-        if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( 'Нет прав.' );
+        if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( 'Доступ запрещен.' );
 
         $ip = sanitize_text_field( $_POST['ip'] );
         $list_type = sanitize_text_field( $_POST['list'] ); 
 
-        if ( ! filter_var( $ip, FILTER_VALIDATE_IP ) ) wp_send_json_error( 'Некорректный IP' );
+        if ( ! filter_var( $ip, FILTER_VALIDATE_IP ) ) wp_send_json_error( 'Некорректный IP.' );
 
         $opt_name = ( $list_type === 'white' ) ? 'rls_ip_whitelist' : 'rls_manual_blacklist';
         $list = get_option( $opt_name, [] );
@@ -393,7 +715,11 @@ class RLS_Admin_Pages {
             update_option( $opt_name, $list );
             
             if ( $list_type === 'black' && class_exists('RLS_API_Client') ) {
-                RLS_API_Client::submit_banned_ip( $ip, 'Manual Ban by Admin' );
+                RLS_API_Client::submit_banned_ip( $ip, 'Manual Ban by Admin', [
+                    'status' => 'global',
+                    'source_kind' => 'manual',
+                    'type' => 'manual',
+                ] );
             }
         }
 
@@ -402,7 +728,7 @@ class RLS_Admin_Pages {
 
     public function ajax_delete_ip_list() {
         check_ajax_referer( 'rls_settings_nonce', 'nonce' );
-        if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( 'Нет прав.' );
+        if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( 'Доступ запрещен.' );
 
         $ip = sanitize_text_field( $_POST['ip'] );
         $list_type = sanitize_text_field( $_POST['list'] );
@@ -418,11 +744,39 @@ class RLS_Admin_Pages {
         wp_send_json_success();
     }
 
+    public function ajax_unblock_ip() {
+        check_ajax_referer( 'rls_settings_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( 'Доступ запрещен.' );
+
+        $ip = sanitize_text_field( $_POST['ip'] ?? '' );
+        if ( ! filter_var( $ip, FILTER_VALIDATE_IP ) ) {
+            wp_send_json_error( 'Некорректный IP.' );
+        }
+
+        $changed = false;
+
+        $blocked = get_option( 'rls_blocked_ips', [] );
+        if ( is_array( $blocked ) && isset( $blocked[ $ip ] ) ) {
+            unset( $blocked[ $ip ] );
+            update_option( 'rls_blocked_ips', $blocked, false );
+            $changed = true;
+        }
+
+        $locked = get_option( 'rls_locked_ips', [] );
+        if ( is_array( $locked ) && isset( $locked[ $ip ] ) ) {
+            unset( $locked[ $ip ] );
+            update_option( 'rls_locked_ips', $locked );
+            $changed = true;
+        }
+
+        wp_send_json_success( [ 'removed' => $changed ] );
+    }
+
     public function ajax_add_signature() {
         check_ajax_referer( 'rls_signatures_nonce', 'nonce' );
-        if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( 'Нет прав.' );
+        if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( 'Доступ запрещен.' );
         $signature = trim( stripslashes( $_POST['signature'] ?? '' ) );
-        if ( empty( $signature ) ) wp_send_json_error( 'Пусто.' );
+        if ( empty( $signature ) ) wp_send_json_error( 'Введите сигнатуру.' );
         $custom = get_option( 'rls_custom_signatures', [] );
         if ( ! in_array( $signature, $custom ) ) {
             $custom[] = $signature;
@@ -434,7 +788,7 @@ class RLS_Admin_Pages {
     
     public function ajax_delete_signature() {
         check_ajax_referer( 'rls_signatures_nonce', 'nonce' );
-        if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( 'Нет прав.' );
+        if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( 'Доступ запрещен.' );
         $signature = trim( stripslashes( $_POST['signature'] ?? '' ) );
         $custom = get_option( 'rls_custom_signatures', [] );
         $key = array_search( $signature, $custom );
@@ -477,5 +831,33 @@ class RLS_Admin_Pages {
     
     public function ajax_sync_stats() { 
         wp_send_json_success(); 
+    }
+
+    public function ajax_clear_attack_logs() {
+        check_ajax_referer( 'rls_settings_nonce', 'nonce' );
+
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Доступ запрещен.' );
+        }
+
+        if ( ! class_exists( 'RLS_Logger' ) ) {
+            wp_send_json_error( 'Логгер недоступен.' );
+        }
+
+        $summary = method_exists( 'RLS_Logger', 'get_log_summary' ) ? RLS_Logger::get_log_summary() : [ 'total' => RLS_Logger::get_logs_count(), 'types' => [] ];
+        $deleted_count = (int) ( $summary['total'] ?? 0 );
+
+        if ( $deleted_count > 0 && class_exists( 'RLS_API_Client' ) ) {
+            $report_response = RLS_API_Client::report_attack_log_cleanup( $summary );
+
+            if ( is_wp_error( $report_response ) || ( is_array( $report_response ) && ( ( $report_response['status'] ?? '' ) !== 'success' ) && ( ( $report_response['status'] ?? '' ) !== 'queued' ) ) ) {
+                $message = is_wp_error( $report_response ) ? $report_response->get_error_message() : 'Сервер не подтвердил прием статистики.';
+                wp_send_json_error( 'Не удалось отправить статистику на сервер перед очисткой: ' . $message );
+            }
+        }
+
+        RLS_Logger::clear_logs();
+
+        wp_send_json_success( [ 'deleted_count' => (int) $deleted_count ] );
     }
 }

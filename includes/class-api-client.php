@@ -2,7 +2,7 @@
 /**
  * Класс RLS_API_Client
  * Отвечает за коммуникацию с сервером Rybinsk Lab.
- * Версия 1.5.2
+ * Версия 2.3.0
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -11,14 +11,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class RLS_API_Client {
 
-    private static function send_request( $body_data, $blocking = true ) {
+    private static function send_request( $body_data, $blocking = true, $timeout = 15 ) {
         $body_data['license_key'] = self::get_license_key();
+        $body_data['plugin_version'] = RLS_VERSION;
         
         $settings = get_option( 'rls_settings', [] );
         $ssl_verify = ! empty( $settings['ssl_verify_api'] );
 
         $args = [
-            'timeout'   => 15,
+            'timeout'   => $timeout,
             'body'      => $body_data,
             'blocking'  => $blocking,
             'sslverify' => $ssl_verify,
@@ -33,8 +34,27 @@ class RLS_API_Client {
             return $response;
         }
 
+        if ( ! $blocking ) {
+            return [ 'status' => 'queued' ];
+        }
+
         $body = wp_remote_retrieve_body( $response );
-        return json_decode( $body, true );
+        $decoded = json_decode( $body, true );
+        $status_code = (int) wp_remote_retrieve_response_code( $response );
+
+        if ( $status_code < 200 || $status_code >= 300 ) {
+            if ( is_array( $decoded ) && isset( $decoded['status'] ) && $decoded['status'] === 'error' ) {
+                return $decoded;
+            }
+
+            return new WP_Error( 'rls_api_http_error', 'API HTTP error: ' . $status_code );
+        }
+
+        if ( ! is_array( $decoded ) ) {
+            return new WP_Error( 'rls_api_invalid_response', 'Invalid API response format' );
+        }
+
+        return $decoded;
     }
     
     private static function get_license_key() {
@@ -48,13 +68,29 @@ class RLS_API_Client {
         ]);
     }
 
-    public static function submit_banned_ip( $ip, $reason ) {
-        self::send_request([
+    public static function sync_blacklist_inventory( array $inventory, $blocking = true ) {
+        return self::send_request([
+            'action'    => 'sync_blacklist_inventory',
+            'inventory' => wp_json_encode( $inventory ),
+            'site_url'  => home_url(),
+        ], $blocking, 30 );
+    }
+
+    public static function submit_banned_ip( $ip, $reason, array $context = [] ) {
+        $body = [
             'action'    => 'submit_banned_ip',
             'ip'        => $ip,
             'reason'    => $reason,
             'site_url'  => home_url()
-        ], false);
+        ];
+
+        foreach ( [ 'status', 'source_kind', 'type' ] as $key ) {
+            if ( isset( $context[ $key ] ) && $context[ $key ] !== '' ) {
+                $body[ $key ] = $context[ $key ];
+            }
+        }
+
+        self::send_request( $body, false );
     }
 
     public static function report_activation() {
@@ -102,6 +138,34 @@ class RLS_API_Client {
         ] );
     }
 
+    public static function get_ai_snippet_limit_bytes( $force_refresh = false ) {
+        $cache_key = 'rls_ai_snippet_limit_bytes';
+
+        if ( ! $force_refresh ) {
+            $cached = get_transient( $cache_key );
+            if ( $cached !== false ) {
+                return max( 0, (int) $cached );
+            }
+        }
+
+        $limit_kb = 200;
+        $response = self::send_request( [
+            'action' => 'get_ai_config',
+        ] );
+
+        if ( ! is_wp_error( $response ) && is_array( $response ) ) {
+            $received = $response['data']['snippet_limit_kb'] ?? null;
+            if ( $received !== null && $received !== '' ) {
+                $limit_kb = max( 0, (int) $received );
+            }
+        }
+
+        $limit_bytes = $limit_kb > 0 ? $limit_kb * 1024 : 0;
+        set_transient( $cache_key, $limit_bytes, MINUTE_IN_SECONDS );
+
+        return $limit_bytes;
+    }
+
     public static function submit_suggestion( $signature ) {
         self::send_request( [
             'action'    => 'submit_suggestion',
@@ -116,6 +180,28 @@ class RLS_API_Client {
             'stats_data' => json_encode( $stats_data ),
             'site_url'   => home_url()
         ] );
+    }
+
+    public static function report_attack_log_cleanup( $payload ) {
+        if ( ! is_array( $payload ) ) {
+            $payload = [
+                'total' => max( 0, (int) $payload ),
+                'types' => [],
+            ];
+        }
+
+        $total = max( 0, (int) ( $payload['total'] ?? 0 ) );
+        $types = isset( $payload['types'] ) && is_array( $payload['types'] ) ? $payload['types'] : [];
+
+        $stats_payload = [
+            'attack_log_cleanup' => $total,
+        ];
+
+        if ( ! empty( $types ) ) {
+            $stats_payload['attack_log_summary'] = $types;
+        }
+
+        return self::report_stats( $stats_payload );
     }
 
     public static function analyze_code_snippet( $snippet ) {
@@ -142,3 +228,5 @@ class RLS_API_Client {
         return $response;
     }
 }
+
+

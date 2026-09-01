@@ -12,6 +12,8 @@ if ( ! defined( 'WPINC' ) ) {
 
 $snapshot_time = get_option( 'rls_snapshot_time', 0 );
 $scan_history  = class_exists( 'RLS_Scan_History' ) ? RLS_Scan_History::get_history( 20 ) : [];
+$license_ui = function_exists( 'rls_get_license_ui_state' ) ? rls_get_license_ui_state() : [];
+$mode_ui = function_exists( 'rls_get_protection_mode_ui_state' ) ? rls_get_protection_mode_ui_state() : [];
 
 // Подгружаем данные карантина
 $quarantined_files = [];
@@ -25,7 +27,15 @@ if(class_exists('RLS_Quarantine')) {
     <h1>
         <span class="dashicons dashicons-shield-alt" style="font-size:30px; width:30px; height:30px; color:#2271b1; vertical-align:middle;"></span> 
         Сканер Безопасности
+        <span style="font-size: 13px; color: <?php echo esc_attr( $license_ui['badge_color'] ?? '#333333' ); ?>; font-weight:600; background:<?php echo esc_attr( $license_ui['badge_background'] ?? '#e5e5e5' ); ?>; padding:2px 8px; border-radius:999px; margin-left:8px; vertical-align:middle;"><?php echo esc_html( $license_ui['headline'] ?? 'Бесплатная версия' ); ?></span>
+        <span style="font-size: 13px; color: <?php echo esc_attr( $mode_ui['badge_color'] ?? '#ffffff' ); ?>; font-weight:600; background:<?php echo esc_attr( $mode_ui['badge_background'] ?? '#198754' ); ?>; padding:2px 8px; border-radius:999px; margin-left:8px; vertical-align:middle;"><?php echo esc_html( $mode_ui['short_label'] ?? 'Полная' ); ?></span>
     </h1>
+
+    <?php if ( ! empty( $mode_ui['warning_text'] ) ) : ?>
+        <div class="notice notice-warning" style="margin:12px 0 16px; padding:10px 12px;">
+            <p style="margin:0;"><strong><?php echo esc_html( $mode_ui['label'] ?? 'Защита отключена' ); ?>:</strong> <?php echo esc_html( $mode_ui['warning_text'] ); ?></p>
+        </div>
+    <?php endif; ?>
 
     <div class="rls-container">
         <!-- Левая колонка (Основной контент) -->
@@ -46,13 +56,16 @@ if(class_exists('RLS_Quarantine')) {
                         <div class="rls-header-desc">
                             <h3><span class="dashicons dashicons-search"></span> Поиск вредоносного кода</h3>
                             <p class="description">
-                                Плагин просканирует файлы ядра, плагинов и тем на наличие шеллов, бэкдоров и известных сигнатур вирусов.
-                                Используется локальная база + Premium облако (если активен ключ).
+                                Быстрое сканирование проверяет PHP и JS на типичные угрозы.
+                                Полное сканирование дольше, но проходит по всем файлам, включая изображения и неизвестные расширения.
                             </p>
                         </div>
-                        <div class="rls-header-actions">
+                        <div class="rls-header-actions rls-scan-controls" style="display:flex; gap:10px; flex-wrap:wrap;">
                             <button id="rls-start-scan-button" class="button button-primary button-hero">
                                 Начать сканирование
+                            </button>
+                            <button id="rls-start-full-scan-button" class="button button-secondary button-hero" type="button" title="Проверить все расширения, включая изображения и неизвестные типы файлов">
+                                Полное сканирование
                             </button>
                         </div>
                     </div>
@@ -79,7 +92,7 @@ if(class_exists('RLS_Quarantine')) {
                             </div>
                         </div>
                         
-                        <div class="rls-header-actions">
+                        <div class="rls-header-actions rls-scan-controls" style="display:flex; gap:10px; flex-wrap:wrap;">
                             <?php if ( $snapshot_time ): ?>
                                 <button id="rls-compare-snapshot-button" class="button button-primary button-hero">
                                     Сравнить файлы

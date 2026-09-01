@@ -52,14 +52,84 @@ class RLS_Scanner_Engine {
         add_action( 'wp_ajax_rls_neutralize_file', [ $this, 'ajax_neutralize_file' ] );
     }
 
+    private function get_scan_mode_context() {
+        $mode = get_transient( 'rls_scan_mode' );
+        $mode = is_string( $mode ) ? sanitize_key( $mode ) : 'important';
+
+        if ( ! in_array( $mode, [ 'quick', 'important', 'full' ], true ) ) {
+            $mode = 'important';
+        }
+
+        return $mode;
+    }
+
+    private function get_scan_profile( $mode ) {
+        $profiles = [
+            'quick' => [
+                'max_size'    => 1048576,
+                'extensions'  => [ 'php', 'phtml', 'php5', 'phar', 'js', 'htaccess' ],
+            ],
+            'important' => [
+                'max_size'    => 2097152,
+                'extensions'  => [ 'php', 'phtml', 'php5', 'phar', 'inc', 'module', 'theme', 'js', 'mjs', 'cjs', 'jsx', 'ts', 'tsx', 'htaccess', 'ini', 'conf', 'cfg', 'json', 'xml', 'yml', 'yaml', 'txt', 'log', 'md', 'tpl', 'twig', 'cgi', 'pl', 'py', 'sh', 'bash', 'bat', 'cmd', 'ps1', 'asp', 'aspx', 'jsp', 'cshtml' ],
+            ],
+            'full' => [
+                'max_size'    => 8388608,
+                'extensions'  => [],
+            ],
+        ];
+
+        $mode = sanitize_key( (string) $mode );
+        if ( ! isset( $profiles[ $mode ] ) ) {
+            $mode = 'important';
+        }
+
+        return $profiles[ $mode ];
+    }
+
+    private function get_scan_file_size_limit() {
+        $mode = $this->get_scan_mode_context();
+        $profile = $this->get_scan_profile( $mode );
+        return (int) $profile['max_size'];
+    }
+
+    private function should_include_discovered_file( $path, $item, $mode ) {
+        if ( $this->is_path_excluded( $path ) ) {
+            return false;
+        }
+
+        $mode = sanitize_key( (string) $mode );
+        if ( $mode === 'full' ) {
+            return true;
+        }
+
+        $profile = $this->get_scan_profile( $mode );
+        $filename = basename( (string) $item );
+        $ext = strtolower( pathinfo( $filename, PATHINFO_EXTENSION ) );
+
+        if ( in_array( $filename, self::SUSPICIOUS_FILES, true ) ) {
+            return true;
+        }
+
+        return in_array( $ext, $profile['extensions'], true );
+    }
+
     // --- 1. ИНДЕКСАЦИЯ ФАЙЛОВ ---
     public function ajax_start_file_discovery() {
         check_ajax_referer( 'rls_scanner_nonce', 'nonce' );
+        $mode = sanitize_key( (string) ( $_POST['mode'] ?? 'important' ) );
+        if ( ! in_array( $mode, [ 'quick', 'important', 'full' ], true ) ) {
+            $mode = 'important';
+        }
         delete_transient( 'rls_scan_file_list' );
         delete_transient( 'rls_dirs_to_scan' );
+        delete_transient( 'rls_scan_mode' );
+        delete_transient( 'rls_scan_max_file_size' );
         set_transient( 'rls_dirs_to_scan', [ ABSPATH ], HOUR_IN_SECONDS );
         set_transient( 'rls_scan_file_list', [], HOUR_IN_SECONDS );
-        wp_send_json_success( [ 'status' => 'started' ] );
+        set_transient( 'rls_scan_mode', $mode, HOUR_IN_SECONDS );
+        set_transient( 'rls_scan_max_file_size', $this->get_scan_profile( $mode )['max_size'], HOUR_IN_SECONDS );
+        wp_send_json_success( [ 'status' => 'started', 'mode' => $mode ] );
     }
 
     public function ajax_discover_files_step() {
@@ -68,6 +138,7 @@ class RLS_Scanner_Engine {
 
         $dirs = get_transient( 'rls_dirs_to_scan' );
         $files = get_transient( 'rls_scan_file_list' );
+        $mode = $this->get_scan_mode_context();
         
         if ( $dirs === false ) wp_send_json_error( 'Session expired' );
         
@@ -89,12 +160,12 @@ class RLS_Scanner_Engine {
                     if ( $item === '.' || $item === '..' ) continue;
                     $path = $current_dir . DIRECTORY_SEPARATOR . $item;
                     
-                    if ( $this->is_path_excluded( $path ) ) continue;
+                    if ( $this->is_path_excluded( $path, $mode ) ) continue;
                     
                     if ( is_dir( $path ) && ! is_link( $path ) ) {
                         $dirs[] = $path;
                     } elseif ( is_file( $path ) ) {
-                        if ( preg_match( '/\.(php|phtml|php5|pl|py|cgi|htaccess|js)$/i', $item ) ) {
+                        if ( $this->should_include_discovered_file( $path, $item, $mode ) ) {
                             $files[] = $path;
                         }
                     }
@@ -115,6 +186,7 @@ class RLS_Scanner_Engine {
         
         $offset = isset( $_POST['offset'] ) ? intval( $_POST['offset'] ) : 0;
         $file_list = get_transient( 'rls_scan_file_list' );
+        $max_file_size = $this->get_scan_file_size_limit();
         
         if ( $file_list === false ) wp_send_json_error( 'Session expired' );
 
@@ -128,9 +200,9 @@ class RLS_Scanner_Engine {
 
             $idx = $offset + $processed;
             if ( isset($file_list[$idx]) ) {
-                $threats = $this->scan_single_file( $file_list[$idx] );
-                if ( ! empty($threats) ) $found_threats = array_merge( $found_threats, $threats );
-            }
+            $threats = $this->scan_single_file( $file_list[$idx] );
+            if ( ! empty($threats) ) $found_threats = array_merge( $found_threats, $threats );
+        }
             $processed++;
         }
         
@@ -150,8 +222,21 @@ class RLS_Scanner_Engine {
 
         // 2. Инициализация белых списков
         if ($whitelist === null) $whitelist = get_option( 'rls_whitelist', [] );
-        if ( isset( $whitelist[ $file_path ] ) && @md5_file( $file_path ) === $whitelist[ $file_path ] ) return [];
-        if ( @filesize( $file_path ) > self::MAX_FILE_SIZE ) return [];
+        $normalized_path = wp_normalize_path( $file_path );
+        $whitelist_entry = $whitelist[ $normalized_path ] ?? ( $whitelist[ $file_path ] ?? null );
+        if ( $whitelist_entry !== null ) {
+            $current_mtime = (int) @filemtime( $file_path );
+            $current_hash  = @md5_file( $file_path );
+
+            if ( is_array( $whitelist_entry ) ) {
+                $saved_mtime = (int) ( $whitelist_entry['mtime'] ?? 0 );
+                if ( $saved_mtime > 0 && $current_mtime === $saved_mtime ) return [];
+            } elseif ( is_string( $whitelist_entry ) && $current_hash === $whitelist_entry ) {
+                return [];
+            }
+        }
+        $max_file_size = $this->get_scan_file_size_limit();
+        if ( @filesize( $file_path ) > $max_file_size ) return [];
         
         $content = @file_get_contents( $file_path );
         if ( ! $content ) return [];
@@ -198,9 +283,10 @@ class RLS_Scanner_Engine {
         return [];
     }
 
-    private function is_path_excluded( $path ) {
+    private function is_path_excluded( $path, $mode = 'important' ) {
         $path = str_replace( '\\', '/', $path );
         if ( strpos( $path, 'wp-content/plugins/rybinsklab-security' ) !== false ) return true;
+        if ( sanitize_key( (string) $mode ) === 'full' ) return false;
         foreach ( $this->excluded_paths as $ex ) if ( strpos( $path, '/' . $ex . '/' ) !== false ) return true;
         return false;
     }
@@ -210,6 +296,7 @@ class RLS_Scanner_Engine {
         check_ajax_referer( 'rls_scanner_nonce', 'nonce' );
         $offset = intval( $_POST['offset'] ); 
         $file_list = get_transient('rls_scan_file_list');
+        $max_file_size = $this->get_scan_file_size_limit();
         if($file_list===false) wp_send_json_error('Session expired');
         
         $total = count($file_list);
@@ -221,7 +308,7 @@ class RLS_Scanner_Engine {
             if ( (microtime(true) - $start_time) > self::TIME_LIMIT ) break;
             $idx = $offset + $processed;
             $file = $file_list[$idx];
-            $snapshot_part[$file] = (@filesize($file) > self::MAX_FILE_SIZE) ? 'SKIPPED' : @md5_file($file);
+            $snapshot_part[$file] = (@filesize($file) > $max_file_size) ? 'SKIPPED' : @md5_file($file);
             $processed++;
         }
         wp_send_json_success(['snapshot_part'=>$snapshot_part, 'processed_count'=>$processed]);
@@ -231,6 +318,7 @@ class RLS_Scanner_Engine {
         check_ajax_referer( 'rls_scanner_nonce', 'nonce' );
         $offset = intval($_POST['offset']); 
         $file_list = get_transient('rls_scan_file_list'); 
+        $max_file_size = $this->get_scan_file_size_limit();
         $orig = get_option('rls_snapshot_data',[]); 
         if($file_list===false) wp_send_json_error('Session expired');
         
@@ -245,7 +333,7 @@ class RLS_Scanner_Engine {
             $p = $file_list[$idx];
             if(!isset($orig[$p])) $changes['added'][]=$p; 
             else { 
-                if(@filesize($p) <= self::MAX_FILE_SIZE && @md5_file($p) !== $orig[$p]) {
+                if(@filesize($p) <= $max_file_size && @md5_file($p) !== $orig[$p]) {
                     $changes['modified'][]=$p; 
                 }
             }
@@ -263,7 +351,7 @@ class RLS_Scanner_Engine {
             if ( class_exists( 'RLS_Cron' ) ) RLS_Cron::sync_detailed_stats();
         }
         if ( class_exists( 'RLS_Scan_History' ) ) RLS_Scan_History::add_entry( 'manual', $threats, 0 );
-        delete_transient( 'rls_scan_file_list' ); delete_transient( 'rls_dirs_to_scan' );
+        delete_transient( 'rls_scan_file_list' ); delete_transient( 'rls_dirs_to_scan' ); delete_transient( 'rls_scan_mode' ); delete_transient( 'rls_scan_max_file_size' );
         wp_send_json_success();
     }
 
@@ -271,7 +359,7 @@ class RLS_Scanner_Engine {
         check_ajax_referer( 'rls_scanner_nonce', 'nonce' );
         $s = json_decode(stripslashes($_POST['snapshot']),true); 
         if(is_array($s)){ update_option('rls_snapshot_data',$s); update_option('rls_snapshot_time',time()); }
-        delete_transient('rls_scan_file_list'); delete_transient('rls_dirs_to_scan');
+        delete_transient('rls_scan_file_list'); delete_transient('rls_dirs_to_scan'); delete_transient('rls_scan_mode'); delete_transient('rls_scan_max_file_size');
         wp_send_json_success();
     }
 
@@ -279,7 +367,7 @@ class RLS_Scanner_Engine {
         check_ajax_referer( 'rls_scanner_nonce', 'nonce' );
         $c = json_decode(stripslashes($_POST['changes']),true); 
         update_option('rls_comparison_results',$c); update_option('rls_comparison_time',time());
-        delete_transient('rls_scan_file_list'); delete_transient('rls_dirs_to_scan');
+        delete_transient('rls_scan_file_list'); delete_transient('rls_dirs_to_scan'); delete_transient('rls_scan_mode'); delete_transient('rls_scan_max_file_size');
         wp_send_json_success();
     }
 
@@ -291,17 +379,36 @@ class RLS_Scanner_Engine {
         require_once( ABSPATH . 'wp-admin/includes/update.php' );
         $rel = str_replace( ABSPATH, '', $fp ); global $wp_version; $sums = get_core_checksums( $wp_version, get_locale() );
         if ( isset( $sums[$rel] ) && md5_file($fp) === $sums[$rel] ) {
-            $w = get_option('rls_whitelist', []); $w[$fp] = md5_file($fp); update_option('rls_whitelist', $w);
+            $fpn = wp_normalize_path( $fp );
+            $w = get_option('rls_whitelist', []);
+            $w[$fpn] = [ 'hash' => md5_file($fp), 'mtime' => (int) @filemtime($fp) ];
+            update_option('rls_whitelist', $w);
             wp_send_json_success(['result' => 'whitelisted']); return;
         }
 
-        $c = file_get_contents($fp); $snip = (strlen($c)>2000) ? substr($c,0,1000)."\n...\n".substr($c,-1000) : $c;
+        $c = file_get_contents($fp);
+        $max_ai_bytes = 204800;
+        if ( class_exists( 'RLS_API_Client' ) && method_exists( 'RLS_API_Client', 'get_ai_snippet_limit_bytes' ) ) {
+            $max_ai_bytes = (int) RLS_API_Client::get_ai_snippet_limit_bytes();
+        }
+        if ( $max_ai_bytes > 0 && strlen( $c ) > $max_ai_bytes ) {
+            $head_bytes = max( 1, (int) floor( $max_ai_bytes / 2 ) );
+            $tail_bytes = max( 1, $max_ai_bytes - $head_bytes );
+            $head = substr( $c, 0, $head_bytes );
+            $tail = substr( $c, -$tail_bytes );
+            $snip = $head . "\n...\n" . $tail;
+        } else {
+            $snip = $c;
+        }
         if(class_exists('RLS_API_Client')) {
             $ai = RLS_API_Client::analyze_code_snippet($snip);
             if(!is_wp_error($ai) && isset($ai['data']['verdict'])) {
                 if($ai['data']['verdict'] === 'Virus') wp_send_json_success(['result' => 'ai_virus', 'snippet' => $snip]);
                 else { 
-                    $w = get_option('rls_whitelist', []); $w[$fp] = md5_file($fp); update_option('rls_whitelist', $w); 
+                    $fpn = wp_normalize_path( $fp );
+                    $w = get_option('rls_whitelist', []);
+                    $w[$fpn] = [ 'hash' => md5_file($fp), 'mtime' => (int) @filemtime($fp) ];
+                    update_option('rls_whitelist', $w); 
                     wp_send_json_success(['result' => 'ai_legitimate']); 
                 }
             } else wp_send_json_error('AI Error');

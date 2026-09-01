@@ -1,75 +1,61 @@
-<div align="center">
+# Rybinsk Lab Security (rybinsklab-security)
 
-# 🛡️ Rybinsk Lab Security (RLS)
+Комплексный плагин безопасности для WordPress: WAF, глобальный чёрный список IP,
+сканер, защита входа и журнал атак.
 
-**Профессиональный комплекс защиты для WordPress с серверами обновлений в РФ и Казахстане.**
-*Enterprise-grade security plugin optimized for CIS region.*
+- **Plugin Name:** Rybinsk Lab Security
+- **Plugin URI:** https://rybinsklab.ru/scan-wp/
+- **Version:** 2.3.0
+- **Author:** Усачёв Денис (https://rybinsklab.ru/)
+- **License:** GPL v2 or later
+- **Text Domain:** rybinsklab-security
 
-[![PHP Version](https://img.shields.io/badge/php-%3E%3D7.4-777bb4.svg)](https://www.php.net/)
-[![WordPress](https://img.shields.io/badge/WordPress-%3E%3D5.8-21759b.svg)](https://wordpress.org/)
-[![License](https://img.shields.io/badge/license-GPLv3-green.svg)](LICENSE)
-[![Stable Version](https://img.shields.io/badge/stable-v1.4.2-blue.svg)](https://github.com/gotical/scan-wp/releases)
+## Возможности
 
-[Описание (RU)](#-описание-проекта) • [Features (EN)](#-english-summary) • [Установка](#-установка) • [Технологии](#-технологии) • [Контакты](#-автор-и-контакты)
+- **WAF (Web Application Firewall)** — фильтрация вредоносных запросов.
+- **Глобальный чёрный список IP** — синхронизация с сервером `rybinsklab.ru/scan-wp`.
+- **Сканер** — поиск вредоносного кода и изменений файлов (FIM).
+- **Защита входа** — ограничение попыток входа, капча.
+- **Журнал атак** — логирование и статистика.
+- **Карантин** — изоляция подозрительных файлов.
+- **GeoIP** — определение геолокации по IP.
 
-</div>
+## Установка
+
+1. Скопируйте папку `rybinsklab-security` в `wp-content/plugins/`.
+2. Активируйте плагин в разделе «Плагины».
+
+Либо загрузите ZIP-архив через «Плагины → Добавить новый → Загрузить плагин».
+
+## Требования
+
+- WordPress 5.0+
+- PHP 7.4+ (рекомендуется PHP 8.x)
+
+## Структура
+
+```
+rybinsklab-security/
+├── rybinsklab-security.php   # Главный файл плагина
+├── uninstall.php             # Очистка при удалении
+├── assets/                   # CSS, JS, GeoIP-данные
+├── includes/                 # Классы плагина (WAF, сканер, API, и т.д.)
+└── vendor/                   # Сторонние библиотеки (IP2Location)
+```
+
+## API-сервер
+
+Плагин взаимодействует с API-сервером:
+`https://rybinsklab.ru/scan-wp/api/index.php`
+
+## Разработка
+
+Этот репозиторий содержит исходный код плагина для дальнейшей доработки и
+публикации. Версия 2.3.0 получена с сервера `rybinsklab.ru/scan-wp/`.
+
+## Лицензия
+
+GPL v2 or later. См. файл [LICENSE](LICENSE).
 
 ---
-
-## 🇷🇺 Описание проекта
-
-**Rybinsk Lab Security** — это плагин безопасности нового поколения, разработанный специально для работы в условиях санкционных ограничений и нестабильности зарубежного интернета. 
-
-В отличие от популярных аналогов (Wordfence, iThemes), которые могут замедлять сайт запросами к удаленным серверам в США/Европе, RLS использует инфраструктуру, расположенную в **Москве и Казахстане**. Это обеспечивает мгновенный отклик и независимость от внешних блокировок.
-
-### Ключевые преимущества:
-
-* 🚀 **Локализованная инфраструктура:** Базы сигнатур и облачные проверки проходят через сервера в РФ/СНГ. Пинг минимален.
-* 🧠 **AI-анализ (Heuristic Engine):** Модуль эвристического анализа выявляет вредоносный код не только по сигнатурам, но и по аномальному поведению (обфускация, eval, base64-инъекции).
-* ⚡ **Производительность:** Оптимизированный PHP-код. Минимум запросов к базе данных (используется кэширование статистики и индексов). Работает даже на shared-хостинге за 100₽.
-* 🔍 **Прозрачность:** Полностью открытый исходный код. Никаких скрытых бэкдоров или сбора лишней телеметрии.
-
----
-
-## 🇬🇧 English Summary
-
-**Rybinsk Lab Security (RLS)** is a lightweight yet powerful security solution for WordPress, specifically optimized for high performance in the CIS region (Russia, Kazakhstan, Belarus).
-
-**Why RLS?**
-* **No Latency:** Update servers are located locally (Moscow/Almaty), ensuring zero network delays during WAF checks.
-* **AI Powered:** Includes a behavioral analysis engine to detect zero-day threats.
-* **Lightweight:** consumes significantly less RAM than major competitors.
-
----
-
-## 🛠 Функционал
-
-### 1. Сканер вредоносного ПО (Malware Scanner)
-* Поиск шеллов, бэкдоров, майнеров и фишинговых страниц.
-* Проверка целостности файлов ядра WordPress (Checksum verification).
-* Сравнение с облачной базой RybinskLab (обновляется ежедневно).
-
-### 2. WAF (Web Application Firewall)
-* Блокировка SQL-инъекций, XSS и RCE атак.
-* Защита от перебора паролей (Brute-force protection).
-* Гео-блокировка (опционально).
-
-### 3. Защита файловой системы
-* Запрет редактирования файлов из админки.
-* Мониторинг изменений в критических директориях.
-
----
-
-## 🚀 Установка
-
-### Вариант 1: Из ZIP-архива (Рекомендуется)
-1. Скачайте последнюю версию плагина со [страницы релизов](https://github.com/gotical/scan-wp/releases) или с [официального сайта](https://rybinsklab.ru/scan-wp/).
-2. В админ-панели WordPress перейдите: `Плагины -> Добавить новый -> Загрузить плагин`.
-3. Выберите архив и нажмите "Установить".
-4. Активируйте плагин.
-
-### Вариант 2: Git (Для разработчиков)
-Клонируйте репозиторий в папку плагинов вашего сайта:
-```bash
-cd /path/to/wordpress/wp-content/plugins/
-git clone [https://github.com/gotical/scan-wp.git](https://github.com/gotical/scan-wp.git)
+*Первый релиз: 2.3.0 · Исходники: rybinsklab.ru/scan-wp/*
