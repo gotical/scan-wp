@@ -106,15 +106,16 @@ if(class_exists('RLS_Quarantine')) {
                     </div>
                 </div>
                 
-                <!-- ВКЛАДКА 3: КАРАНТИН (НОВОЕ) -->
+                <!-- ВКЛАДКА 3: КАРАНТИН -->
                 <div id="quarantine" class="rls-tab-panel">
                     <h3>☣️ Карантин (Изолированные файлы)</h3>
                     <p class="description">Файлы перемещены в безопасную папку и переименованы. Они не могут нанести вред сайту.</p>
-                    
+
                     <?php if ( empty( $quarantined_files ) ) : ?>
-                        <div class="rls-results-clean" style="padding:20px; background:#f0f6fc; border:1px solid #cce5ff; border-radius:5px; color:#004085; text-align:center;">
-                            <span class="dashicons dashicons-shield" style="font-size:40px; width:40px; height:40px; display:block; margin:0 auto 10px;"></span> 
-                            <strong>Карантин пуст.</strong><br>Все чисто.
+                        <div class="rls-empty-state">
+                            <img src="<?php echo esc_url( plugin_dir_url( RLS_PLUGIN_FILE ) . 'assets/images/shield-empty.svg' ); ?>" alt="Пусто" width="180" />
+                            <h3>Карантин пуст</h3>
+                            <p>Все чисто — ни один файл не был помещён в карантин.</p>
                         </div>
                     <?php else : ?>
                         <table class="wp-list-table widefat fixed striped">
@@ -146,7 +147,15 @@ if(class_exists('RLS_Quarantine')) {
                 <!-- ВКЛАДКА 4: ИСТОРИЯ -->
                 <div id="scan-history" class="rls-tab-panel">
                     <p class="description">Журнал последних 20 проверок системы (Ручные и Автоматические).</p>
-                    
+
+                    <?php if ( empty( $scan_history ) ) : ?>
+                        <div class="rls-empty-state">
+                            <img src="<?php echo esc_url( plugin_dir_url( RLS_PLUGIN_FILE ) . 'assets/images/scan-empty.svg' ); ?>" alt="Нет истории" width="180" />
+                            <h3>История сканирований пуста</h3>
+                            <p>Запустите первое сканирование, чтобы увидеть результаты здесь.</p>
+                        </div>
+                    <?php else : ?>
+
                     <table class="wp-list-table widefat fixed striped table-view-list">
                         <thead>
                             <tr>
@@ -197,6 +206,7 @@ if(class_exists('RLS_Quarantine')) {
                             <?php endforeach; endif; ?>
                         </tbody>
                     </table>
+                    <?php endif; ?>
                 </div>
 
                 <!-- ОБЛАСТЬ ПРОГРЕССА (СКРЫТА ПО УМОЛЧАНИЮ) -->

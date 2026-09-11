@@ -176,11 +176,65 @@ class RLS_Admin_Pages {
 
         add_submenu_page(
             'rls-scanner',
+            'Мониторинг',
+            'Мониторинг',
+            'manage_options',
+            'rls-monitoring',
+            [ $this, 'render_monitoring_page' ]
+        );
+
+        add_submenu_page(
+            'rls-scanner',
+            'Мастер настройки',
+            'Мастер настройки',
+            'manage_options',
+            'rls-wizard',
+            [ $this, 'render_wizard_page' ]
+        );
+
+        add_submenu_page(
+            'rls-scanner',
+            'Диагностика',
+            'Диагностика',
+            'manage_options',
+            'rls-health',
+            [ $this, 'render_health_page' ]
+        );
+
+        add_submenu_page(
+            'rls-scanner',
             'Условия и политика',
             'Условия и политика',
             'manage_options',
             'rls-policy',
             [ $this, 'render_policy_page' ]
+        );
+
+        add_submenu_page(
+            'rls-scanner',
+            'Hardening',
+            'Hardening',
+            'manage_options',
+            'rls-hardening',
+            [ $this, 'render_hardening_page' ]
+        );
+
+        add_submenu_page(
+            'rls-scanner',
+            '2FA',
+            '2FA',
+            'manage_options',
+            'rls-2fa',
+            [ $this, 'render_2fa_page' ]
+        );
+
+        add_submenu_page(
+            'rls-scanner',
+            'Уведомления',
+            'Уведомления',
+            'manage_options',
+            'rls-notifications',
+            [ $this, 'render_notifications_page' ]
         );
     }
     
@@ -188,26 +242,63 @@ class RLS_Admin_Pages {
      * пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ CSS пїЅ JS пїЅпїЅпїЅпїЅпїЅпїЅ.
      */
     public function enqueue_admin_assets( $hook_suffix ) {
-        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ)
         if ( strpos( $hook_suffix, 'rls-' ) === false && $hook_suffix !== 'plugins.php' ) {
             return;
         }
 
         $is_settings_screen = ( strpos( $hook_suffix, 'rls-' ) !== false && strpos( $hook_suffix, 'rls-scanner' ) === false ) || $hook_suffix === 'plugins.php';
         $is_scanner_screen  = strpos( $hook_suffix, 'rls-scanner' ) !== false;
-        
+
         wp_enqueue_style( 'rls-admin-styles', plugin_dir_url( RLS_PLUGIN_FILE ) . 'assets/css/admin.css', [], RLS_VERSION );
 
-        // пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ + пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ)
+        // Inline help: tooltip JS for option descriptions.
+        wp_enqueue_script( 'rls-tooltip', 'data:text/javascript;base64,' . base64_encode( 'jQuery(function($){$(".rls-tooltip").each(function(){var $t=$(this);if(!$t.attr("title"))return;$t.attr("data-rls-tip",$t.attr("title")).removeAttr("title");});});' ), [], RLS_VERSION, true );
+
+        // UI helpers (toast, confirm, counters, palette, drag-drop).
+        wp_enqueue_script( 'rls-ui', plugin_dir_url( RLS_PLUGIN_FILE ) . 'assets/js/ui.js', [ 'jquery' ], RLS_VERSION, true );
+
         if ( $is_settings_screen ) {
-            wp_enqueue_script( 'rls-admin-script', plugin_dir_url( RLS_PLUGIN_FILE ) . 'assets/js/admin.js', [ 'jquery' ], RLS_VERSION, true );
+            wp_enqueue_script( 'rls-admin-script', plugin_dir_url( RLS_PLUGIN_FILE ) . 'assets/js/admin.js', [ 'jquery', 'rls-ui' ], RLS_VERSION, true );
             wp_localize_script( 'rls-admin-script', 'rls_admin_data', [
-                'ajax_url'         => admin_url( 'admin-ajax.php' ), 
+                'ajax_url'         => admin_url( 'admin-ajax.php' ),
                 'settings_nonce'   => wp_create_nonce( 'rls_settings_nonce' ),
                 'sync_nonce'       => wp_create_nonce( 'rls_sync_nonce' ),
                 'questions_nonce'  => wp_create_nonce( 'rls_login_questions_nonce' ),
-                'signatures_nonce' => wp_create_nonce( 'rls_signatures_nonce' )
+                'signatures_nonce' => wp_create_nonce( 'rls_signatures_nonce' ),
+                'hardening_nonce'  => wp_create_nonce( 'rls_hardening_nonce' ),
+                '2fa_nonce'        => wp_create_nonce( 'rls_2fa_nonce' ),
+                'password_nonce'   => wp_create_nonce( 'rls_password_strength' ),
+                'monitoring_nonce' => wp_create_nonce( 'rls_monitoring_nonce' ),
+                'health_nonce'     => wp_create_nonce( 'rls_health_nonce' ),
+                'anomaly_nonce'    => wp_create_nonce( 'rls_anomaly_nonce' ),
+                'is_premium'       => ( function_exists( 'rls_is_premium_license_active' ) && rls_is_premium_license_active() ) ? 1 : 0,
             ]);
+        }
+
+        // Contextual help on settings pages.
+        $screen = get_current_screen();
+        if ( $screen && strpos( $hook_suffix, 'rls-' ) !== false ) {
+            $help_tabs = [
+                'overview' => [
+                    'title'   => 'Обзор',
+                    'content' => '<p>Rybinsk Lab Security — модульная защита WordPress. Все настройки сохраняются единым submit.</p><p>Используйте вкладки для перехода между разделами.</p>',
+                ],
+                'shortcuts' => [
+                    'title'   => 'Горячие клавиши',
+                    'content' => '<ul style="list-style: disc; padding-left: 20px;"><li><kbd>Ctrl</kbd>+<kbd>S</kbd> — сохранить настройки</li><li><kbd>Esc</kbd> — закрыть модальные окна</li></ul>',
+                ],
+                'support' => [
+                    'title'   => 'Поддержка',
+                    'content' => '<p>Документация: <a href="https://rybinsklab.ru/scan-wp/" target="_blank">rybinsklab.ru/scan-wp</a></p><p>Экспорт диагностики: Диагностика → Экспорт отчёта</p>',
+                ],
+            ];
+            foreach ( $help_tabs as $id => $tab ) {
+                $screen->add_help_tab( [
+                    'id'      => 'rls_' . $id,
+                    'title'   => $tab['title'],
+                    'content' => $tab['content'],
+                ] );
+            }
         }
         
         // пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
@@ -231,6 +322,20 @@ class RLS_Admin_Pages {
 
         $rls_settings_section = $section;
         $rls_settings_initial_tab = $tab;
+
+        // Dedicated views for new top-level sections.
+        $section_views = [
+            'hardening'     => 'hardening-page.php',
+            '2fa'           => '2fa-page.php',
+            'notifications' => 'notifications-page.php',
+        ];
+
+        if ( isset( $section_views[ $section ] ) ) {
+            require RLS_PLUGIN_PATH . 'includes/admin/views/settings-page.php';
+            require RLS_PLUGIN_PATH . 'includes/admin/views/' . $section_views[ $section ];
+            unset( $rls_settings_section, $rls_settings_initial_tab );
+            return;
+        }
 
         require RLS_PLUGIN_PATH . 'includes/admin/views/settings-page.php';
 
@@ -263,6 +368,43 @@ class RLS_Admin_Pages {
 
     public function render_policy_page() {
         require_once RLS_PLUGIN_PATH . 'includes/admin/views/policy-page.php';
+    }
+
+    public function render_hardening_page() {
+        $this->render_settings_section_page( 'hardening', 'tab-general' );
+    }
+
+    public function render_2fa_page() {
+        $this->render_settings_section_page( '2fa', 'tab-general' );
+    }
+
+    public function render_notifications_page() {
+        $this->render_settings_section_page( 'notifications', 'tab-general' );
+    }
+
+    public function render_monitoring_page() {
+        $monitor = new RLS_Monitoring_Dashboard();
+        $monitor->render_page();
+    }
+
+    public function render_health_page() {
+        $health = new RLS_Health();
+        $checks = $health->run_checks();
+        echo '<div class="wrap"><h1>Диагностика системы</h1>';
+        echo '<table class="wp-list-table widefat striped"><thead><tr><th>Проверка</th><th>Значение</th><th>Статус</th></tr></thead><tbody>';
+        foreach ( $checks as $c ) {
+            $status_label = $c['status'] === 'ok' ? 'OK' : ( $c['status'] === 'warn' ? 'WARN' : 'ERR' );
+            echo '<tr><td><strong>' . esc_html( $c['label'] ) . '</strong><br><small>' . esc_html( $c['hint'] ) . '</small></td>';
+            echo '<td><code>' . esc_html( $c['value'] ) . '</code></td>';
+            echo '<td><strong>' . esc_html( $status_label ) . '</strong></td></tr>';
+        }
+        echo '</tbody></table>';
+        echo '<p><a href="' . esc_url( wp_nonce_url( admin_url( 'admin-ajax.php?action=rls_health_export' ), 'rls_health_nonce', 'nonce' ) ) . '" class="button">Экспорт отчёта</a></p>';
+        echo '</div>';
+    }
+
+    public function render_wizard_page() {
+        require_once RLS_PLUGIN_PATH . 'includes/admin/views/wizard.php';
     }
 
     public function maybe_redirect_after_activation() {
@@ -350,9 +492,70 @@ class RLS_Admin_Pages {
         <?php
     }
 
-    public function initialize_settings() { 
+    public function initialize_settings() {
         register_setting( 'rls_settings_group', 'rls_settings', [ $this, 'sanitize_settings_array' ] );
         register_setting( 'rls_settings_group', 'rls_auto_scan_frequency', [ 'sanitize_callback' => 'sanitize_text_field' ] );
+        register_setting( 'rls_settings_group', 'rls_antispam_settings', [ $this, 'sanitize_antispam' ] );
+        register_setting( 'rls_settings_group', 'rls_password_policy', [ $this, 'sanitize_password_policy' ] );
+        register_setting( 'rls_settings_group', 'rls_notification_settings', [ $this, 'sanitize_notifications' ] );
+    }
+
+    public function sanitize_antispam( $input ) {
+        $defaults = [
+            'enabled'     => 0,
+            'min_seconds' => 4,
+            'max_links'   => 2,
+        ];
+        $input = is_array( $input ) ? $input : [];
+        $out = $defaults;
+        $out['enabled'] = ! empty( $input['enabled'] ) ? 1 : 0;
+        $out['min_seconds'] = max( 0, min( 60, (int) ( $input['min_seconds'] ?? 4 ) ) );
+        $out['max_links'] = max( 0, min( 20, (int) ( $input['max_links'] ?? 2 ) ) );
+        return $out;
+    }
+
+    public function sanitize_password_policy( $input ) {
+        $defaults = [
+            'enabled'        => 0,
+            'min_length'     => 12,
+            'require_upper'  => 1,
+            'require_lower'  => 1,
+            'require_digit'  => 1,
+            'require_symbol' => 1,
+            'hibp_check'     => 1,
+        ];
+        $input = is_array( $input ) ? $input : [];
+        $out = $defaults;
+        $out['enabled']        = ! empty( $input['enabled'] ) ? 1 : 0;
+        $out['min_length']     = max( 6, min( 128, (int) ( $input['min_length'] ?? 12 ) ) );
+        $out['require_upper']  = ! empty( $input['require_upper'] ) ? 1 : 0;
+        $out['require_lower']  = ! empty( $input['require_lower'] ) ? 1 : 0;
+        $out['require_digit']  = ! empty( $input['require_digit'] ) ? 1 : 0;
+        $out['require_symbol'] = ! empty( $input['require_symbol'] ) ? 1 : 0;
+        $out['hibp_check']     = ! empty( $input['hibp_check'] ) ? 1 : 0;
+        return $out;
+    }
+
+    public function sanitize_notifications( $input ) {
+        $defaults = [
+            'email'                    => get_option( 'admin_email' ),
+            'notify_admin_login_new_ip'=> 1,
+            'notify_bruteforce'        => 1,
+            'notify_malware'           => 1,
+            'notify_integrity'         => 1,
+            'rate_limit_per_hour'      => 20,
+        ];
+        $input = is_array( $input ) ? $input : [];
+        $out = $defaults;
+        $email = sanitize_email( $input['email'] ?? '' );
+        if ( $email !== '' && is_email( $email ) ) {
+            $out['email'] = $email;
+        }
+        foreach ( [ 'notify_admin_login_new_ip', 'notify_bruteforce', 'notify_malware', 'notify_integrity' ] as $k ) {
+            $out[ $k ] = ! empty( $input[ $k ] ) ? 1 : 0;
+        }
+        $out['rate_limit_per_hour'] = max( 0, min( 200, (int) ( $input['rate_limit_per_hour'] ?? 20 ) ) );
+        return $out;
     }
     
     /**
@@ -500,6 +703,13 @@ class RLS_Admin_Pages {
         $block_sync = array_values( (array) ( $sanitized_input['geo_countries_block'] ?? [] ) );
         $sanitized_input['geo_countries'] = array_values( array_unique( array_merge( $allow_sync, $block_sync ) ) );
 
+        // New hardening toggles.
+        $sanitized_input['hardening_enabled']  = ( isset( $input['hardening_enabled'] ) && $input['hardening_enabled'] == 1 ) ? 1 : 0;
+        $sanitized_input['2fa_required_admin'] = ( isset( $input['2fa_required_admin'] ) && $input['2fa_required_admin'] == 1 ) ? 1 : 0;
+        $sanitized_input['hotlink_protection'] = ( isset( $input['hotlink_protection'] ) && $input['hotlink_protection'] == 1 ) ? 1 : 0;
+        $sanitized_input['hotlink_allowed_hosts'] = sanitize_text_field( (string) ( $input['hotlink_allowed_hosts'] ?? '' ) );
+        $sanitized_input['security_score_visible'] = ( isset( $input['security_score_visible'] ) && $input['security_score_visible'] == 1 ) ? 1 : 0;
+
         if ( isset( $input['rls_setup_completed'] ) && (int) $input['rls_setup_completed'] === 1 ) {
             update_option( 'rls_setup_completed', 1 );
         }
@@ -599,62 +809,73 @@ class RLS_Admin_Pages {
         ] );
     }
 
-    // --- пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ (AI + CHECKSUMS + SIZE CHECK) ---
+    // --- AI-проверка файла (CHECKSUMS + SIZE CHECK) ---
     public function ajax_neutralize_file() {
-        check_ajax_referer('rls_scanner_nonce', 'nonce'); 
-        if (!current_user_can('manage_options')) wp_send_json_error('Доступ запрещен.');
-        
-        // пїЅпїЅпїЅпїЅпїЅ: пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ wp_normalize_path пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
-        $filepath = wp_normalize_path( trim(stripslashes($_POST['filepath'] ?? '')) ); 
-        $signature = trim(stripslashes($_POST['signature'] ?? ''));
-        
-        if (empty($filepath) || !file_exists($filepath) || !is_readable($filepath)) wp_send_json_error('Файл недоступен.');
-        
-        // 1. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ WP
+        check_ajax_referer('rls_scanner_nonce', 'nonce');
+        if ( ! current_user_can('manage_options') ) {
+            wp_send_json_error('Доступ запрещен.');
+        }
+
+        $filepath  = wp_normalize_path( trim( wp_unslash( $_POST['filepath'] ?? '' ) ) );
+        $signature = trim( wp_unslash( $_POST['signature'] ?? '' ) );
+
+        if ( empty( $filepath ) ) {
+            wp_send_json_error('Путь не указан.');
+        }
+        if ( ! $this->is_safe_file_path( $filepath ) ) {
+            wp_send_json_error('Недопустимый путь.');
+        }
+        if ( ! file_exists( $filepath ) || ! is_readable( $filepath ) ) {
+            wp_send_json_error('Файл недоступен.');
+        }
+
+        // 1. Проверка целостности файла ядра WordPress
         require_once( ABSPATH . 'wp-admin/includes/update.php' );
-        
-        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ (пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ WP)
         $relative = str_replace( wp_normalize_path(ABSPATH), '', $filepath );
-        
         global $wp_version;
         $checksums = get_core_checksums( $wp_version, get_locale() );
-        
+
         if ( is_array($checksums) && isset( $checksums[$relative] ) ) {
             if ( md5_file($filepath) === $checksums[$relative] ) {
                 $this->add_to_whitelist($filepath);
-                wp_send_json_success(['result' => 'whitelisted']); 
+                wp_send_json_success(['result' => 'whitelisted']);
                 return;
             }
         }
 
-        // 2. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
         $filesize = @filesize($filepath);
         $max_ai_bytes = 204800;
         if ( class_exists( 'RLS_API_Client' ) && method_exists( 'RLS_API_Client', 'get_ai_snippet_limit_bytes' ) ) {
             $max_ai_bytes = (int) RLS_API_Client::get_ai_snippet_limit_bytes();
         }
 
-        // 3. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
-        $lines = file($filepath, FILE_IGNORE_NEW_LINES); 
         $snip = "";
         $found_sig = false;
 
-        // пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
-        if ( !empty($signature) ) {
-            foreach($lines as $k=>$l) {
-                if(strpos($l, $signature) !== false) { 
-                    $start = max(0, $k-3); 
-                    $end = min(count($lines)-1, $k+3);
-                    for($i=$start; $i<=$end; $i++) $snip.="L".($i+1).": ".$lines[$i]."\n"; 
-                    $found_sig = true;
-                    break; 
+        // Поиск фрагмента вокруг совпадения сигнатуры
+        if ( ! empty( $signature ) && strlen( $signature ) <= 255 ) {
+            $lines = file( $filepath, FILE_IGNORE_NEW_LINES );
+            if ( is_array( $lines ) ) {
+                foreach ( $lines as $k => $l ) {
+                    if ( strpos( $l, $signature ) !== false ) {
+                        $start = max( 0, $k - 3 );
+                        $end   = min( count( $lines ) - 1, $k + 3 );
+                        for ( $i = $start; $i <= $end; $i++ ) {
+                            $snip .= "L" . ( $i + 1 ) . ": " . $lines[ $i ] . "\n";
+                        }
+                        $found_sig = true;
+                        break;
+                    }
                 }
             }
         }
-        
-        // пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ), пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
-        if ( !$found_sig ) {
-            $content = file_get_contents($filepath);
+
+        // Fallback: head+tail snippet
+        if ( ! $found_sig ) {
+            $content = file_get_contents( $filepath );
+            if ( $content === false ) {
+                wp_send_json_error( 'Не удалось прочитать файл.' );
+            }
             if ( $max_ai_bytes > 0 && strlen( $content ) > $max_ai_bytes ) {
                 $head_bytes = max( 1, (int) floor( $max_ai_bytes / 2 ) );
                 $tail_bytes = max( 1, $max_ai_bytes - $head_bytes );
@@ -664,20 +885,23 @@ class RLS_Admin_Pages {
             } else {
                 $snip = $content;
             }
+            // Free original content from memory; only the snippet leaves the host.
+            unset( $content );
         }
-        
-        if(!$snip) wp_send_json_error('Не удалось подготовить фрагмент кода.');
-        
-        // 4. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ AI
+
+        if ( ! $snip ) {
+            wp_send_json_error('Не удалось подготовить фрагмент кода.');
+        }
+
         if ( class_exists('RLS_API_Client') ) {
             $ai = RLS_API_Client::analyze_code_snippet($snip);
-            
-            if(!is_wp_error($ai) && isset($ai['data']['verdict'])) {
-                if($ai['data']['verdict'] === 'Virus') {
+
+            if ( ! is_wp_error( $ai ) && isset( $ai['data']['verdict'] ) ) {
+                if ( $ai['data']['verdict'] === 'Virus' ) {
                     wp_send_json_success(['result' => 'ai_virus', 'snippet' => $snip]);
-                } else { 
-                    $this->add_to_whitelist($filepath); 
-                    wp_send_json_success(['result' => 'ai_legitimate']); 
+                } else {
+                    $this->add_to_whitelist($filepath);
+                    wp_send_json_success(['result' => 'ai_legitimate']);
                 }
             } else {
                 wp_send_json_error('Не удалось выполнить AI-анализ.');
@@ -687,15 +911,32 @@ class RLS_Admin_Pages {
         }
     }
 
+    /**
+     * Whitelist-safe path check shared with the scanner engine.
+     */
+    private function is_safe_file_path( $filepath ) {
+        $filepath = wp_normalize_path( (string) $filepath );
+        if ( empty( $filepath ) || strlen( $filepath ) > 1024 ) return false;
+        if ( strpos( $filepath, '..' ) !== false || strpos( $filepath, "\0" ) !== false ) return false;
+        $abspath    = wp_normalize_path( ABSPATH );
+        $wp_content = wp_normalize_path( WP_CONTENT_DIR );
+        $inside_root = ( strpos( $filepath, $abspath ) === 0 || strpos( $filepath, $wp_content ) === 0 );
+        if ( ! $inside_root ) return false;
+        $quarantine = wp_normalize_path( wp_upload_dir()['basedir'] . '/rls-quarantine' );
+        if ( strpos( $filepath, $quarantine ) === 0 ) return false;
+        if ( strpos( $filepath, wp_normalize_path( WP_PLUGIN_DIR . '/rybinsklab-security' ) ) === 0 ) return false;
+        return true;
+    }
+
     private function add_to_whitelist( $filepath ) {
-        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
-        $filepath = wp_normalize_path( $filepath );
-        $w = get_option('rls_whitelist', []); 
-        $w[$filepath] = [
-            'hash'  => md5_file($filepath),
-            'mtime' => (int) @filemtime($filepath),
+        $filepath = wp_normalize_path( (string) $filepath );
+        if ( ! $this->is_safe_file_path( $filepath ) ) return;
+        $w = get_option('rls_whitelist', []);
+        $w[ $filepath ] = [
+            'hash'  => (string) md5_file( $filepath ),
+            'mtime' => (int) @filemtime( $filepath ),
         ];
-        update_option('rls_whitelist', $w, false); 
+        update_option( 'rls_whitelist', $w, false );
     }
 
     public function ajax_add_ip_list() {
@@ -795,37 +1036,43 @@ class RLS_Admin_Pages {
         if ( $key !== false ) {
             unset( $custom[ $key ] );
             update_option( 'rls_custom_signatures', array_values( $custom ) );
+            wp_cache_delete( 'rls_signatures_' . wp_cache_get( 'rls_signatures_version', 'rls' ), 'rls' );
         }
         wp_send_json_success();
     }
 
     public function ajax_add_login_question() {
-        check_ajax_referer('rls_login_questions_nonce', 'nonce'); 
-        if(!current_user_can('manage_options')) wp_send_json_error();
-        
-        $q = trim(stripslashes($_POST['question'] ?? '')); 
-        $a = trim(stripslashes($_POST['answer'] ?? ''));
-        
-        if($q && $a) { 
-            $qs = get_option('rls_login_questions', []); 
-            $qs[] = ['q' => $q, 'a' => password_hash($a, PASSWORD_DEFAULT)]; 
-            update_option('rls_login_questions', $qs); 
-            wp_send_json_success(['key' => count($qs)-1, 'q' => esc_html($q)]); 
-        } 
-        wp_send_json_error();
+        check_ajax_referer('rls_login_questions_nonce', 'nonce');
+        if ( ! current_user_can('manage_options') ) wp_send_json_error();
+
+        $q = trim( wp_unslash( $_POST['question'] ?? '' ) );
+        $a = trim( wp_unslash( $_POST['answer'] ?? '' ) );
+
+        if ( $q === '' || $a === '' ) wp_send_json_error();
+        // Length caps prevent storage abuse and DoS via massive inputs.
+        if ( mb_strlen( $q ) > 255 || mb_strlen( $a ) > 255 ) wp_send_json_error();
+
+        $qs = get_option('rls_login_questions', []);
+        $qs[] = [
+            'q'     => sanitize_text_field( $q ),
+            'a'     => password_hash( $a, PASSWORD_DEFAULT ),
+            'plain' => '', // SECURITY: never persist plaintext answers.
+        ];
+        update_option('rls_login_questions', $qs);
+        wp_send_json_success(['key' => count($qs) - 1, 'q' => esc_html( $q )]);
     }
-    
+
     public function ajax_delete_login_question() {
-        check_ajax_referer('rls_login_questions_nonce', 'nonce'); 
-        if(!current_user_can('manage_options')) wp_send_json_error();
-        
-        $key = intval($_POST['key']); 
-        $qs = get_option('rls_login_questions', []); 
-        
-        if(isset($qs[$key])) { 
-            unset($qs[$key]); 
-            update_option('rls_login_questions', array_values($qs)); 
-        } 
+        check_ajax_referer('rls_login_questions_nonce', 'nonce');
+        if ( ! current_user_can('manage_options') ) wp_send_json_error();
+
+        $key = (int) ( $_POST['key'] ?? -1 );
+        $qs = get_option('rls_login_questions', []);
+
+        if ( isset( $qs[ $key ] ) ) {
+            unset( $qs[ $key ] );
+            update_option('rls_login_questions', array_values( $qs ));
+        }
         wp_send_json_success();
     }
     

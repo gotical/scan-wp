@@ -656,6 +656,135 @@ jQuery(function($) {
                    .replace(/"/g, "&quot;")
                    .replace(/'/g, "&#039;");
     }
+
+    /* ===========================================================
+     * v2.4.0+ — Hardening, 2FA, notifications interactions
+     * =========================================================== */
+
+    // 2FA setup flow
+    const twofaBox = $('#rls-2fa-setup-box');
+    if (twofaBox.length) {
+        $('#rls-2fa-start-button').on('click', function() {
+            const btn = $(this).prop('disabled', true).text('Подготовка…');
+            $.post(rls_admin_data.ajax_url, {
+                action: 'rls_2fa_setup',
+                nonce: rls_admin_data['2fa_nonce']
+            }).done(function(res) {
+                if (res && res.success) {
+                    $('#rls-2fa-step-1').hide();
+                    $('#rls-2fa-step-2').show();
+                    $('#rls-2fa-secret').text(res.data.secret);
+                    const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=' + encodeURIComponent(res.data.qr_url);
+                    $('#rls-2fa-qr-img').attr('src', qrUrl);
+                } else {
+                    alert((res && res.data) || 'Ошибка запуска настройки 2FA.');
+                }
+                btn.prop('disabled', false).text('Включить 2FA');
+            });
+        });
+
+        $('#rls-2fa-confirm-button').on('click', function() {
+            const code = $('#rls-2fa-code-input').val().trim();
+            if (!/^\d{6}$/.test(code)) {
+                alert('Введите 6-значный код из приложения.');
+                return;
+            }
+            $.post(rls_admin_data.ajax_url, {
+                action: 'rls_2fa_confirm',
+                nonce: rls_admin_data['2fa_nonce'],
+                code: code
+            }).done(function(res) {
+                if (res && res.success) {
+                    $('#rls-2fa-step-2').hide();
+                    $('#rls-2fa-step-3').show();
+                    const ul = $('#rls-2fa-backup-codes').empty();
+                    (res.data.backup_codes || []).forEach(function(c) {
+                        ul.append($('<li>').text(c));
+                    });
+                } else {
+                    alert((res && res.data) || 'Неверный код.');
+                }
+            });
+        });
+
+        $('#rls-2fa-disable-button').on('click', function() {
+            const code = prompt('Для отключения 2FA введите текущий код из приложения:');
+            if (!code) return;
+            $.post(rls_admin_data.ajax_url, {
+                action: 'rls_2fa_disable',
+                nonce: rls_admin_data['2fa_nonce'],
+                code: code
+            }).done(function(res) {
+                if (res && res.success) {
+                    location.reload();
+                } else {
+                    alert((res && res.data) || 'Не удалось отключить 2FA.');
+                }
+            });
+        });
+
+        $('#rls-2fa-regen-button').on('click', function() {
+            const code = prompt('Введите текущий код из приложения для пересоздания резервных кодов:');
+            if (!code) return;
+            $.post(rls_admin_data.ajax_url, {
+                action: 'rls_2fa_regenerate_backup',
+                nonce: rls_admin_data['2fa_nonce'],
+                code: code
+            }).done(function(res) {
+                if (res && res.success) {
+                    const ul = $('#rls-2fa-backup-codes').empty();
+                    (res.data.backup_codes || []).forEach(function(c) {
+                        ul.append($('<li>').text(c));
+                    });
+                } else {
+                    alert((res && res.data) || 'Не удалось обновить резервные коды.');
+                }
+            });
+        });
+    }
+
+    // Hardening: apply/remove htaccess rules
+    $('#rls-hardening-apply').on('click', function() {
+        const btn = $(this).prop('disabled', true).text('Применение…');
+        $.post(rls_admin_data.ajax_url, {
+            action: 'rls_apply_hardening',
+            nonce: rls_admin_data.hardening_nonce
+        }).done(function(res) {
+            alert(res && res.success ? 'Правила .htaccess применены.' : ((res && res.data) || 'Ошибка.'));
+            location.reload();
+        });
+    });
+
+    $('#rls-hardening-remove').on('click', function() {
+        if (!confirm('Удалить правила защиты из .htaccess?')) return;
+        $.post(rls_admin_data.ajax_url, {
+            action: 'rls_remove_hardening',
+            nonce: rls_admin_data.hardening_nonce
+        }).done(function(res) {
+            alert(res && res.success ? 'Правила удалены.' : 'Ошибка.');
+            location.reload();
+        });
+    });
+
+    // Tab persistence
+    $('.rls-wrap').on('click', '.rls-nav-tabs .nav-tab', function(e) {
+        const id = String($(this).attr('href') || '').replace('#', '');
+        if (!id) return;
+        try { localStorage.setItem('rls_active_tab', id); } catch (err) {}
+    });
+    try {
+        const last = localStorage.getItem('rls_active_tab');
+        if (last && !forcedInitialTab) {
+            const target = $('.rls-nav-tabs .nav-tab[href="#' + last + '"]');
+            if (target.length) target.trigger('click');
+        }
+    } catch (err) {}
+
+    // Smooth notifications on save
+    if (window.location.search.indexOf('settings-updated=true') !== -1) {
+        $('html, body').animate({ scrollTop: 0 }, 200);
+    }
 });
+
 
 

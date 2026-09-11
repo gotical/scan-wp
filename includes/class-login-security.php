@@ -388,6 +388,8 @@ class RLS_Login_Security {
         update_option( 'rls_bruteforce_lockouts', $lockout_meta, false );
 
         if ( class_exists( 'RLS_Logger' ) ) RLS_Logger::log_attack( $ip, 'brute', 'IP Locked Out (' . $lock_seconds . ' sec, level ' . $lock_count . ')' );
+        // Notify admin via email on brute-force lockout.
+        do_action( 'rls_bruteforce_lockout', $ip, $lock_seconds );
         if ( class_exists( 'RLS_API_Client' ) ) {
             RLS_API_Client::submit_banned_ip( $ip, 'Brute Force', [
                 'status' => 'pending',

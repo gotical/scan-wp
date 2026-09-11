@@ -71,12 +71,15 @@ class RLS_Logger {
             'reason'      => $reason
         ];
 
+        $settings = get_option( 'rls_settings', [] );
+        $ssl_verify = apply_filters( 'rls_logger_ssl_verify', ! empty( $settings['ssl_verify_api'] ) );
+
         wp_remote_post( RLS_API_URL, [
             'body'      => $body,
             'timeout'   => 5,
             'blocking'  => false,
-            'sslverify' => false
-        ]);
+            'sslverify' => $ssl_verify,
+        ] );
     }
 
     private static function get_license_key() {

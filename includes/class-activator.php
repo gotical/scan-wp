@@ -66,10 +66,13 @@ class RLS_Activator {
         if ( class_exists( 'RLS_GeoIP' ) ) {
             RLS_GeoIP::ensure_seed_database();
         }
-        
+
+        // SECURITY: snapshot hashes of critical plugin files to detect on-disk tampering.
+        self::refresh_integrity_manifest();
+
         // Принудительное обновление сигнатур при активации
         update_option( 'rls_base_signatures', self::BASE_SIGNATURES );
-        
+
         if ( get_option( 'rls_activation_report_sent' ) !== 'yes' ) {
             update_option( 'rls_activation_report_sent', 'no' );
             if ( class_exists( 'RLS_API_Client' ) ) {
@@ -78,8 +81,42 @@ class RLS_Activator {
         }
 
         set_transient( 'rls_activation_redirect', 1, 120 );
-        
+
         flush_rewrite_rules();
+    }
+
+    /**
+     * Records md5 hashes of key PHP files for tamper detection.
+     */
+    public static function refresh_integrity_manifest() {
+        $files = [
+            'rybinsklab-security.php',
+            'uninstall.php',
+            'includes/class-firewall.php',
+            'includes/class-login-security.php',
+            'includes/class-api-client.php',
+            'includes/class-cron.php',
+            'includes/class-updater.php',
+            'includes/class-logger.php',
+            'includes/class-geoip.php',
+            'includes/class-rls-quarantine.php',
+            'includes/scanner/class-scanner-engine.php',
+            'includes/scanner/class-scan-history.php',
+            'includes/admin/class-admin-pages.php',
+        ];
+        $manifest = [];
+        $base = wp_normalize_path( RLS_PLUGIN_PATH );
+        foreach ( $files as $relative ) {
+            $full = $base . $relative;
+            if ( file_exists( $full ) ) {
+                $hash = @md5_file( $full );
+                if ( is_string( $hash ) ) {
+                    // Store relative path so it survives plugin moves within the same dir.
+                    $manifest[ $relative ] = $hash;
+                }
+            }
+        }
+        update_option( 'rls_plugin_file_hashes', $manifest, false );
     }
 
     public static function deactivate() {
@@ -93,7 +130,7 @@ class RLS_Activator {
         }
     }
 
-    private static function create_database_tables() {
+    public static function create_database_tables() {
         global $wpdb;
         $charset_collate = $wpdb->get_charset_collate();
 
@@ -129,7 +166,7 @@ class RLS_Activator {
         dbDelta( $sql_log );
     }
     
-    private static function setup_options() {
+    public static function setup_options() {
         // 1. Основные настройки
         if ( get_option( 'rls_settings' ) === false ) {
             add_option( 'rls_settings', [
@@ -165,7 +202,8 @@ class RLS_Activator {
                 'allow_amazonbot'       => 0,
                 'allow_ccbot'           => 0,
                 'allow_bytespider'      => 0,
-                'ssl_verify_api'        => 0,
+                // SECURITY: SSL verification of API requests enabled by default.
+                'ssl_verify_api'        => 1,
                 'geo_blocking_enabled'  => 0,
                 'geo_mode'              => 'block',
                 'geo_countries'         => [],
@@ -180,6 +218,12 @@ class RLS_Activator {
                 'captcha_enabled_users' => 0,
                 'captcha_client_key'    => '',
                 'captcha_server_key'    => '',
+                // New hardening features (v2.4.0+)
+                'hardening_enabled'     => 0,
+                '2fa_required_admin'    => 0,
+                'hotlink_protection'    => 0,
+                'hotlink_allowed_hosts' => '',
+                'security_score_visible'=> 1,
             ]);
         }
         if ( get_option( 'rls_setup_completed' ) === false ) {

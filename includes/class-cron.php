@@ -27,7 +27,14 @@ class RLS_Cron {
     }
 
     public function run_hourly_tasks() {
-        // 1. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+        // SECURITY: skip all cloud activity when scanner integrity check fails
+        // to avoid leaking telemetry on a compromised host.
+        if ( ! self::plugin_integrity_ok() ) {
+            error_log( 'RLS: plugin integrity check failed; skipping cron tasks.' );
+            return;
+        }
+
+        // 1. Activation report (one-shot)
         if ( get_option( 'rls_activation_report_sent' ) !== 'yes' ) {
             $response = RLS_API_Client::report_activation();
             if ( ! is_wp_error( $response ) && isset( $response['status'] ) && $response['status'] === 'success' ) {
@@ -35,21 +42,49 @@ class RLS_Cron {
             }
         }
 
-        // 2. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+        // 2. Статистика + локальные blacklist'ы
         self::sync_detailed_stats();
         self::sync_local_blacklists();
 
-        // 3. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+        // 3. Сигнатуры
         $this->update_premium_signatures();
 
-        // 4. пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
+        // 4. Глобальный blacklist
         $this->sync_global_blacklist();
-        
-        // 5. пїЅпїЅпїЅпїЅ
+
+        // 5. Heartbeat
         RLS_API_Client::send_heartbeat();
 
-        // 6. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+        // 6. Автоскан
         $this->check_and_run_auto_scan();
+    }
+
+    /**
+     * Verifies that the core plugin files have not been modified on disk.
+     * Returns true on a clean install or when the cache does not yet exist.
+     * Emits `rls_integrity_violation` with the list of changed files when mismatch is detected.
+     */
+    public static function plugin_integrity_ok() {
+        $manifest_key = 'rls_plugin_file_hashes';
+        $manifest = get_option( $manifest_key, [] );
+        if ( empty( $manifest ) || ! is_array( $manifest ) ) {
+            return true;
+        }
+        $violations = [];
+        foreach ( $manifest as $path => $expected_hash ) {
+            $full = wp_normalize_path( WP_PLUGIN_DIR . '/rybinsklab-security/' . $path );
+            // File may legitimately not exist (e.g., uninstalled); only flag when present.
+            if ( ! file_exists( $full ) ) continue;
+            $actual = @md5_file( $full );
+            if ( ! is_string( $actual ) || ! hash_equals( (string) $expected_hash, $actual ) ) {
+                $violations[] = $path;
+            }
+        }
+        if ( ! empty( $violations ) ) {
+            do_action( 'rls_integrity_violation', $violations );
+            return false;
+        }
+        return true;
     }
 
     public function run_daily_tasks() {
@@ -350,36 +385,38 @@ class RLS_Cron {
             @ini_set( 'memory_limit', '512M' );
         }
 
-        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ Fatal Error
         if ( file_exists( RLS_PLUGIN_PATH . 'includes/scanner/class-scanner-engine.php' ) ) {
             require_once RLS_PLUGIN_PATH . 'includes/scanner/class-scanner-engine.php';
         } else {
             error_log('RLS Error: Scanner engine file missing.');
             return;
         }
-        
+
         if ( ! class_exists( 'RLS_Scan_History' ) && file_exists( RLS_PLUGIN_PATH . 'includes/scanner/class-scan-history.php' ) ) {
             require_once RLS_PLUGIN_PATH . 'includes/scanner/class-scan-history.php';
         }
-        
+
         try {
             if ( class_exists( 'RLS_Scanner_Engine' ) ) {
                 $engine = new RLS_Scanner_Engine();
                 $files_to_scan = $engine->get_critical_files_list();
-                
+
                 if ( ! empty( $files_to_scan ) ) {
                     $start_time = time();
                     $threats = $engine->scan_files_direct( $files_to_scan );
                     $duration = time() - $start_time;
-                    
+
                     if ( class_exists( 'RLS_Scan_History' ) ) {
                         RLS_Scan_History::add_entry( 'auto', $threats, $duration );
                     }
-                    
+
                     if ( count( $threats ) > 0 ) {
                         $stats = get_option( 'rls_stats', [] );
                         $stats['viruses_found'] = ( $stats['viruses_found'] ?? 0 ) + count( $threats );
                         update_option( 'rls_stats', $stats );
+
+                        // Notify admin via email on malware detection.
+                        do_action( 'rls_malware_detected', $threats, 'auto' );
                     }
                 }
             }

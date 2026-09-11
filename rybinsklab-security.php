@@ -279,8 +279,19 @@ if ( ! function_exists( 'rls_get_protection_mode_ui_state' ) ) {
 
 require_once RLS_PLUGIN_PATH . 'includes/class-firewall.php';
 require_once RLS_PLUGIN_PATH . 'includes/class-login-security.php';
+require_once RLS_PLUGIN_PATH . 'includes/class-hardening.php';
+require_once RLS_PLUGIN_PATH . 'includes/class-2fa.php';
+require_once RLS_PLUGIN_PATH . 'includes/class-notifications.php';
+require_once RLS_PLUGIN_PATH . 'includes/class-antispam.php';
+require_once RLS_PLUGIN_PATH . 'includes/class-password-policy.php';
+require_once RLS_PLUGIN_PATH . 'includes/class-gdpr.php';
+require_once RLS_PLUGIN_PATH . 'includes/class-session.php';
+require_once RLS_PLUGIN_PATH . 'includes/class-anomaly.php';
+require_once RLS_PLUGIN_PATH . 'includes/class-cache-compat.php';
+require_once RLS_PLUGIN_PATH . 'includes/class-health.php';
+require_once RLS_PLUGIN_PATH . 'includes/class-multisite.php';
 
-// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
+// Core infrastructure
 require_once RLS_PLUGIN_PATH . 'includes/class-api-client.php';
 require_once RLS_PLUGIN_PATH . 'includes/class-activator.php';
 require_once RLS_PLUGIN_PATH . 'includes/class-cron.php';
@@ -289,11 +300,12 @@ require_once RLS_PLUGIN_PATH . 'includes/class-logger.php';
 require_once RLS_PLUGIN_PATH . 'includes/class-geoip.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-rls-quarantine.php';
 
-// пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+// Scanner & admin
 require_once RLS_PLUGIN_PATH . 'includes/scanner/class-scan-history.php';
 require_once RLS_PLUGIN_PATH . 'includes/scanner/class-scanner-engine.php';
 require_once RLS_PLUGIN_PATH . 'includes/admin/class-admin-pages.php';
 require_once RLS_PLUGIN_PATH . 'includes/admin/class-dashboard-widget.php';
+require_once RLS_PLUGIN_PATH . 'includes/admin/class-monitoring-dashboard.php';
 
 /**
  * пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
@@ -311,33 +323,61 @@ function rls_run_plugin(): void {
         dirname( plugin_basename( RLS_PLUGIN_FILE ) ) . '/languages'
     );
 
-    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
-    $firewall = new RLS_Firewall();
-    $firewall->init();
+    // Multisite support (no-op on single site)
+    ( new RLS_Multisite() )->init();
 
-    $login_security = new RLS_Login_Security();
-    $login_security->init();
+    // Firewall + WAF (edge)
+    ( new RLS_Firewall() )->init();
 
-    $cron = new RLS_Cron();
-    $cron->init();
+    // Hardening module (htaccess, headers, version, REST, methods)
+    ( new RLS_Hardening() )->init();
 
-    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ-пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
-    new RLS_Updater( 
-        RLS_VERSION, 
-        plugin_basename( RLS_PLUGIN_FILE ), 
-        RLS_API_URL 
+    // Login protection (brute force, honeypot, captcha)
+    ( new RLS_Login_Security() )->init();
+
+    // Two-factor authentication
+    ( new RLS_2FA() )->init();
+
+    // Comment spam protection
+    ( new RLS_Antispam() )->init();
+
+    // Password policy (HIBP, complexity)
+    ( new RLS_Password_Policy() )->init();
+
+    // GDPR compliance
+    ( new RLS_GDPR() )->init();
+
+    // Session hardening
+    ( new RLS_Session() )->init();
+
+    // Anomaly detection
+    ( new RLS_Anomaly() )->init();
+
+    // Cache plugin compatibility
+    ( new RLS_Cache_Compat() )->init();
+
+    // Notifications (admin login, brute force, malware)
+    ( new RLS_Notifications() )->init();
+
+    // Health check & diagnostics
+    ( new RLS_Health() )->init();
+
+    // Cron / scheduled tasks
+    ( new RLS_Cron() )->init();
+
+    // Auto-updater
+    new RLS_Updater(
+        RLS_VERSION,
+        plugin_basename( RLS_PLUGIN_FILE ),
+        RLS_API_URL
     );
 
-    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+    // Admin-only modules
     if ( is_admin() ) {
-        $admin_pages = new RLS_Admin_Pages();
-        $admin_pages->init();
-
-        $scanner_engine = new RLS_Scanner_Engine();
-        $scanner_engine->init();
-
-        $dashboard_widget = new RLS_Dashboard_Widget();
-        $dashboard_widget->init();
+        ( new RLS_Admin_Pages() )->init();
+        ( new RLS_Scanner_Engine() )->init();
+        ( new RLS_Dashboard_Widget() )->init();
+        ( new RLS_Monitoring_Dashboard() )->init();
     }
 }
 

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 160" fill="none">
+    <defs>
+        <linearGradient id="g-shield" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#2271b1"/>
+            <stop offset="100%" stop-color="#1d3a8a"/>
+        </linearGradient>
+        <linearGradient id="g-shine" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#ffffff" stop-opacity="0.3"/>
+            <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+        </linearGradient>
+    </defs>
+    <ellipse cx="100" cy="140" rx="60" ry="6" fill="#2271b1" opacity="0.1"/>
+    <path d="M100 20 L160 40 L160 90 Q160 120 100 145 Q40 120 40 90 L40 40 Z" fill="url(#g-shield)"/>
+    <path d="M100 20 L160 40 L160 70 Q100 50 40 70 L40 40 Z" fill="url(#g-shine)"/>
+    <path d="M85 80 L95 90 L120 65" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <circle cx="100" cy="80" r="2" fill="#fff" opacity="0.5"/>
+    <circle cx="50" cy="30" r="3" fill="#2271b1" opacity="0.3"/>
+    <circle cx="160" cy="50" r="2" fill="#2271b1" opacity="0.3"/>
+    <circle cx="40" cy="100" r="2" fill="#2271b1" opacity="0.3"/>
+    <circle cx="170" cy="120" r="3" fill="#2271b1" opacity="0.3"/>
+</svg>

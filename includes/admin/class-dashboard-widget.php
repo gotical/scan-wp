@@ -26,12 +26,12 @@ class RLS_Dashboard_Widget {
     
     public function render_widget_content() {
         $stats = get_option( 'rls_stats', [] );
-        
+
         $firewall = intval( $stats['firewall_blocked'] ?? 0 );
         $login    = intval( $stats['login_attempts_blocked'] ?? 0 );
         $viruses  = intval( $stats['viruses_found'] ?? 0 );
-        $total    = $firewall + $login; 
-        
+        $total    = $firewall + $login;
+
         $license_ui = function_exists( 'rls_get_license_ui_state' ) ? rls_get_license_ui_state() : [];
         $mode_ui = function_exists( 'rls_get_protection_mode_ui_state' ) ? rls_get_protection_mode_ui_state() : [];
         $is_prem = ! empty( $license_ui['is_premium'] );
@@ -39,66 +39,98 @@ class RLS_Dashboard_Widget {
         $mode_color = $mode_ui['badge_color'] ?? '#ffffff';
         $mode_short = $mode_ui['short_label'] ?? 'Полная';
         $protection_is_enabled = empty( $mode_ui['mode'] ) || $mode_ui['mode'] !== 'scanner_only';
-        $status_color = $protection_is_enabled ? '#46b450' : '#d63638';
+        $status_color = $protection_is_enabled ? '#16a34a' : '#dc2626';
         $status_text = $protection_is_enabled ? 'Защита активна' : 'Защита отключена';
-        
+
+        // Security score (0..100) based on enabled features.
+        $score = $this->calculate_security_score();
+        $score_color = $score >= 80 ? '#16a34a' : ( $score >= 50 ? '#d97706' : '#dc2626' );
         ?>
         <div class="rls-widget-container">
             <div class="rls-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                <span class="rls-status" style="color: <?php echo esc_attr( $status_color ); ?>; font-weight:600;">
+                <span style="color: <?php echo esc_attr( $status_color ); ?>; font-weight:600;">
                     <span class="dashicons dashicons-shield-alt"></span> <?php echo esc_html( $status_text ); ?>
                 </span>
-                <span class="rls-badge" style="background:<?php echo esc_attr( $license_ui['badge_background'] ?? ( $is_prem ? '#f0ad4e' : '#e5e5e5' ) ); ?>; color:<?php echo esc_attr( $license_ui['badge_color'] ?? ( $is_prem ? '#fff' : '#333' ) ); ?>; padding:2px 6px; border-radius:4px; font-size:10px; text-transform:uppercase;">
-                    <?php echo esc_html( $license_ui['badge_text'] ?? ( $is_prem ? 'PREMIUM' : 'FREE' ) ); ?>
-                </span>
-                <span class="rls-badge" style="background:<?php echo esc_attr( $mode_background ); ?>; color:<?php echo esc_attr( $mode_color ); ?>; padding:2px 6px; border-radius:4px; font-size:10px;">
-                    <?php echo esc_html( $mode_short ); ?>
-                </span>
-            </div>
-
-            <div style="margin:0 0 12px; padding:10px 12px; background:#f6f7f7; border:1px solid #dcdcde; border-radius:6px;">
-                <?php if ( ! empty( $mode_ui['status_text'] ) ) : ?>
-                    <div style="font-weight:600; color:#1d2327; margin-bottom:6px;">
-                        <?php echo esc_html( $mode_ui['status_text'] ); ?>
-                    </div>
-                <?php endif; ?>
-                <div style="font-weight:600; color:#1d2327;">
-                    <?php echo esc_html( $license_ui['status_text'] ?? 'Бесплатная версия активна' ); ?>
-                </div>
-                <?php if ( ! empty( $license_ui['remaining_text'] ) ) : ?>
-                    <div style="margin-top:4px; color:#2271b1;">
-                        <?php echo esc_html( $license_ui['remaining_text'] ); ?>
-                    </div>
-                <?php endif; ?>
-                <?php if ( ! empty( $license_ui['expires_text'] ) ) : ?>
-                    <div style="margin-top:4px; color:#50575e;">
-                        <?php echo esc_html( $license_ui['expires_text'] ); ?>
-                    </div>
-                <?php endif; ?>
-                <?php if ( ! empty( $license_ui['domains_text'] ) ) : ?>
-                    <div style="margin-top:4px; color:#50575e;">
-                        <?php echo esc_html( $license_ui['domains_text'] ); ?>
-                    </div>
-                <?php endif; ?>
-            </div>
-
-            <div class="rls-stats-grid" style="display:flex; gap:10px; margin:15px 0;">
-                <div class="rls-stat-box" style="flex:1; text-align:center; padding:10px; background:#f8f9fa; border:1px solid #ddd; border-radius:4px;">
-                    <div style="font-size:20px; font-weight:bold; color:#2271b1;"><?php echo number_format_i18n($total); ?></div>
-                    <div style="font-size:11px; color:#666;">Атак отражено</div>
-                </div>
-                <div class="rls-stat-box" style="flex:1; text-align:center; padding:10px; background:<?php echo $viruses>0 ? '#fbeaea' : '#f8f9fa'; ?>; border:1px solid <?php echo $viruses>0 ? '#dc3545' : '#ddd'; ?>; border-radius:4px;">
-                    <div style="font-size:20px; font-weight:bold; color:<?php echo $viruses>0 ? '#dc3545' : '#46b450'; ?>;"><?php echo number_format_i18n($viruses); ?></div>
-                    <div style="font-size:11px; color:#666;">Вирусов</div>
+                <div style="display:flex; gap:6px;">
+                    <span class="rls-badge-log <?php echo $is_prem ? 'green' : 'gray'; ?>">
+                        <?php echo esc_html( $license_ui['badge_text'] ?? ( $is_prem ? 'PREMIUM' : 'FREE' ) ); ?>
+                    </span>
+                    <span class="rls-badge-log blue">
+                        <?php echo esc_html( $mode_short ); ?>
+                    </span>
                 </div>
             </div>
 
-            <div class="rls-footer" style="border-top:1px solid #eee; padding-top:10px; font-size:12px; display:flex; justify-content:space-between;">
-                <a href="<?php echo admin_url('admin.php?page=rls-settings#tab-logs'); ?>">Журнал атак</a>
+            <div class="rls-score-card">
+                <div class="rls-score-ring" style="background: conic-gradient(<?php echo esc_attr( $score_color ); ?> <?php echo $score * 3.6; ?>deg, #e4e8ef 0deg);">
+                    <span><?php echo intval( $score ); ?></span>
+                </div>
+                <div class="rls-score-info">
+                    <h3>Security Score</h3>
+                    <p>
+                        <?php if ( $score >= 80 ) : ?>
+                            <span class="rls-status-pill is-on">Отличный уровень</span>
+                        <?php elseif ( $score >= 50 ) : ?>
+                            <span class="rls-status-pill is-warn">Требуется внимание</span>
+                        <?php else : ?>
+                            <span class="rls-status-pill is-err">Критические пробелы</span>
+                        <?php endif; ?>
+                    </p>
+                    <p style="margin:0; font-size:12px;"><a href="<?php echo admin_url( 'admin.php?page=rls-hardening' ); ?>">Улучшить →</a></p>
+                </div>
+            </div>
+
+            <div class="rls-widget-grid">
+                <div class="rls-widget-tile is-ok">
+                    <div class="rls-widget-num"><?php echo number_format_i18n( $total ); ?></div>
+                    <div class="rls-widget-label">Атак отражено</div>
+                </div>
+                <div class="rls-widget-tile <?php echo $viruses > 0 ? 'is-err' : 'is-ok'; ?>">
+                    <div class="rls-widget-num"><?php echo number_format_i18n( $viruses ); ?></div>
+                    <div class="rls-widget-label">Вирусов</div>
+                </div>
+                <div class="rls-widget-tile">
+                    <div class="rls-widget-num"><?php echo intval( $stats['ai_requests'] ?? 0 ); ?></div>
+                    <div class="rls-widget-label">AI-проверок</div>
+                </div>
+            </div>
+
+            <div style="border-top:1px solid var(--rls-border); padding-top:10px; margin-top:8px; font-size:12px; display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+                <a href="<?php echo admin_url('admin.php?page=rls-settings&tab=tab-logs'); ?>">Журнал атак</a>
+                <a href="<?php echo admin_url('admin.php?page=rls-hardening'); ?>">Hardening</a>
+                <a href="<?php echo admin_url('admin.php?page=rls-2fa'); ?>">2FA</a>
                 <a href="<?php echo admin_url('admin.php?page=rls-settings'); ?>">Настройки</a>
             </div>
         </div>
         <?php
+    }
+
+    /**
+     * Lightweight security score (0..100) based on enabled features.
+     */
+    private function calculate_security_score() {
+        $score = 0;
+        $settings = get_option( 'rls_settings', [] );
+        if ( ! is_array( $settings ) ) $settings = [];
+
+        // WAF (25 pts)
+        if ( ! empty( $settings['enable_firewall'] ) ) $score += 25;
+        // Hardening (20 pts)
+        if ( ! empty( $settings['hardening_enabled'] ) ) $score += 20;
+        // Login security (15 pts)
+        if ( ! empty( $settings['enable_login_security'] ) ) $score += 15;
+        // 2FA (15 pts)
+        if ( ! empty( $settings['2fa_required_admin'] ) ) $score += 15;
+        // SSL verify API (10 pts)
+        if ( ! empty( $settings['ssl_verify_api'] ) ) $score += 10;
+        // GeoIP (5 pts)
+        if ( ! empty( $settings['geo_blocking_enabled'] ) ) $score += 5;
+        // Captcha (5 pts)
+        if ( ! empty( $settings['captcha_enabled_admin'] ) || ! empty( $settings['captcha_enabled_users'] ) ) $score += 5;
+        // Hotlink (5 pts bonus)
+        if ( ! empty( $settings['hotlink_protection'] ) ) $score += 5;
+
+        return min( 100, max( 0, $score ) );
     }
 }
 

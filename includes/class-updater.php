@@ -73,22 +73,51 @@ class RLS_Updater {
 
         if ( $remote_info ) {
             $res = new stdClass();
-            $res->name = $remote_info->name ?? 'Rybinsk Lab Security';
+            $res->name = sanitize_text_field( (string) ( $remote_info->name ?? 'Rybinsk Lab Security' ) );
             $res->slug = $this->plugin_slug;
-            $res->version = $remote_info->new_version;
-            $res->author = $remote_info->author ?? 'Rybinsk Lab';
-            $res->homepage = $remote_info->homepage ?? ( $remote_info->url ?? '' );
-            $res->download_link = $remote_info->package;
-            $res->trunk = $remote_info->package;
-            $res->last_updated = $remote_info->last_updated ?? date('Y-m-d H:i:s');
+            $res->version = sanitize_text_field( (string) $remote_info->new_version );
+            $res->author = sanitize_text_field( (string) ( $remote_info->author ?? 'Rybinsk Lab' ) );
+            $res->homepage = esc_url_raw( (string) ( $remote_info->homepage ?? ( $remote_info->url ?? '' ) ) );
 
-            if ( isset( $remote_info->requires ) ) $res->requires = $remote_info->requires;
-            if ( isset( $remote_info->requires_php ) ) $res->requires_php = $remote_info->requires_php;
-            if ( isset( $remote_info->tested ) ) $res->tested = $remote_info->tested;
-            
-            if ( isset( $remote_info->sections ) ) $res->sections = (array)$remote_info->sections;
-            if ( isset( $remote_info->icons ) ) $res->icons = (array)$remote_info->icons;
-            if ( isset( $remote_info->banners ) ) $res->banners = (array)$remote_info->banners;
+            $package = '';
+            if ( ! empty( $remote_info->package ) ) {
+                $package = esc_url_raw( (string) $remote_info->package );
+                $allowed_host = wp_parse_url( $this->api_url, PHP_URL_HOST );
+                $pkg_host     = wp_parse_url( $package, PHP_URL_HOST );
+                $pkg_scheme   = wp_parse_url( $package, PHP_URL_SCHEME );
+                if ( 'https' !== strtolower( (string) $pkg_scheme ) || ( $allowed_host && $pkg_host && strtolower( $pkg_host ) !== strtolower( $allowed_host ) ) ) {
+                    $package = '';
+                }
+            }
+            $res->download_link = $package;
+            $res->trunk = $package;
+            $res->last_updated = sanitize_text_field( (string) ( $remote_info->last_updated ?? gmdate( 'Y-m-d H:i:s' ) ) );
+
+            if ( isset( $remote_info->requires ) ) $res->requires = sanitize_text_field( (string) $remote_info->requires );
+            if ( isset( $remote_info->requires_php ) ) $res->requires_php = sanitize_text_field( (string) $remote_info->requires_php );
+            if ( isset( $remote_info->tested ) ) $res->tested = sanitize_text_field( (string) $remote_info->tested );
+
+            if ( isset( $remote_info->sections ) && is_array( $remote_info->sections ) ) {
+                $sections = [];
+                foreach ( (array) $remote_info->sections as $k => $v ) {
+                    $sections[ sanitize_key( (string) $k ) ] = wp_kses_post( (string) $v );
+                }
+                $res->sections = $sections;
+            }
+            if ( isset( $remote_info->icons ) && is_array( $remote_info->icons ) ) {
+                $icons = [];
+                foreach ( (array) $remote_info->icons as $k => $v ) {
+                    $icons[ sanitize_key( (string) $k ) ] = esc_url_raw( (string) $v );
+                }
+                $res->icons = $icons;
+            }
+            if ( isset( $remote_info->banners ) && is_array( $remote_info->banners ) ) {
+                $banners = [];
+                foreach ( (array) $remote_info->banners as $k => $v ) {
+                    $banners[ sanitize_key( (string) $k ) ] = esc_url_raw( (string) $v );
+                }
+                $res->banners = $banners;
+            }
 
             return $res;
         }
@@ -150,10 +179,13 @@ class RLS_Updater {
             'site_url'    => home_url()
         ];
 
+        $settings = get_option( 'rls_settings', [] );
+        $ssl_verify = apply_filters( 'rls_updater_ssl_verify', ! empty( $settings['ssl_verify_api'] ), $this );
+
         $args = [
             'timeout'   => 15,
             'body'      => $body,
-            'sslverify' => false 
+            'sslverify' => $ssl_verify,
         ];
 
         $request = wp_remote_post( $this->api_url, $args );
@@ -163,8 +195,12 @@ class RLS_Updater {
         }
 
         $response = json_decode( wp_remote_retrieve_body( $request ), true );
-        
-        if ( isset($response['status']) && $response['status'] === 'success' && isset($response['data']) ) {
+
+        if ( ! is_array( $response ) ) {
+            return false;
+        }
+
+        if ( isset($response['status']) && $response['status'] === 'success' && isset($response['data']) && is_array( $response['data'] ) ) {
             return $this->normalize_remote_info( (object) $response['data'] );
         }
 
@@ -197,8 +233,21 @@ class RLS_Updater {
         $res->slug = $this->plugin_slug;
         $res->plugin = $this->plugin_base;
         $res->new_version = $remote_info->new_version;
-        $res->package = $remote_info->package;
-        $res->url = $remote_info->url ?? '';
+
+        // SECURITY: enforce HTTPS for the download URL and pin it to a trusted host
+        // to prevent MITM-induced remote code execution via the WordPress updater.
+        $package = isset( $remote_info->package ) ? esc_url_raw( (string) $remote_info->package ) : '';
+        if ( $package !== '' ) {
+            $allowed_host = wp_parse_url( $this->api_url, PHP_URL_HOST );
+            $pkg_host     = wp_parse_url( $package, PHP_URL_HOST );
+            $pkg_scheme   = wp_parse_url( $package, PHP_URL_SCHEME );
+
+            if ( 'https' !== strtolower( (string) $pkg_scheme ) || ( $allowed_host && $pkg_host && strtolower( $pkg_host ) !== strtolower( $allowed_host ) ) ) {
+                $package = '';
+            }
+        }
+        $res->package = $package;
+        $res->url = isset( $remote_info->url ) ? esc_url_raw( (string) $remote_info->url ) : '';
 
         if ( isset( $remote_info->tested ) ) {
             $res->tested = $remote_info->tested;

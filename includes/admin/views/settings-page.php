@@ -19,6 +19,9 @@ $rls_section_titles = [
     'blacklist'       => 'Черный список',
     'login-security'  => 'Защита входа',
     'settings'        => 'Настройки сканера',
+    'hardening'       => 'Hardening',
+    '2fa'             => 'Двухфакторная аутентификация',
+    'notifications'   => 'Email-уведомления',
 ];
 $rls_section_subtitles = [
     'license'         => 'Статус ключа, Premium-возможности и синхронизация облачных баз.',
@@ -27,6 +30,9 @@ $rls_section_subtitles = [
     'blacklist'       => 'Белый список, черный список, временные блокировки и облачная база угроз.',
     'login-security'  => 'Контрольные вопросы, honeypot и защита формы входа WordPress.',
     'settings'        => 'Автосканирование, база сигнатур и пользовательские правила поиска.',
+    'hardening'       => 'Защита wp-config, блок PHP в uploads, скрытие версии, CSP, REST API.',
+    '2fa'             => 'TOTP-аутентификация (Google Authenticator, Authy, 1Password).',
+    'notifications'   => 'Уведомления о критических событиях безопасности.',
 ];
 $rls_current_section_title = $rls_section_titles[ $rls_settings_section ] ?? 'Панель защиты сайта';
 $rls_current_section_subtitle = $rls_section_subtitles[ $rls_settings_section ] ?? 'Современная панель управления режимами защиты, лицензией, базами угроз, сканером и журналом событий.';
@@ -134,7 +140,15 @@ if ( ! isset( $_POST['rls_action'] ) ) {
     $license_key_for_refresh = trim( (string) ( $settings_for_license['license_key'] ?? '' ) );
     $license_status_for_refresh = (string) get_option( 'rls_license_status', '' );
 
-    if ( $license_key_for_refresh !== '' && $license_status_for_refresh !== 'valid' && class_exists( 'RLS_API_Client' ) ) {
+    // SECURITY: auto-refresh requires an explicit user action OR a recent transient
+    // (set by an admin request) to avoid CSRF-driven API calls on every page load.
+    $refresh_allowed = (
+        isset( $_GET['rls_license_refresh'] )
+        || ( current_user_can( 'manage_options' ) && get_transient( 'rls_license_refresh_requested' ) )
+    );
+
+    if ( $refresh_allowed && $license_key_for_refresh !== '' && $license_status_for_refresh !== 'valid' && class_exists( 'RLS_API_Client' ) ) {
+        delete_transient( 'rls_license_refresh_requested' );
         $license_refresh = RLS_API_Client::validate_license_key( $license_key_for_refresh );
 
         if ( is_array( $license_refresh ) && ( $license_refresh['status'] ?? '' ) === 'success' ) {
@@ -306,15 +320,18 @@ if ( ! empty( $log_types ) ) {
 
     <div class="rls-section-nav" aria-label="Разделы Rybinsk Lab Security">
         <?php
-        $rls_section_nav = [
-            'license'         => [ 'label' => 'Лицензия', 'icon' => 'dashicons-admin-network', 'page' => 'rls-license' ],
-            'protection-mode' => [ 'label' => 'Режим защиты', 'icon' => 'dashicons-shield-alt', 'page' => 'rls-protection-mode' ],
-            'firewall'        => [ 'label' => 'Фаервол', 'icon' => 'dashicons-shield', 'page' => 'rls-firewall' ],
-            'blacklist'       => [ 'label' => 'Черный список', 'icon' => 'dashicons-networking', 'page' => 'rls-blacklist' ],
-            'login-security'  => [ 'label' => 'Защита входа', 'icon' => 'dashicons-lock', 'page' => 'rls-login-security' ],
-            'settings'        => [ 'label' => 'Настройки', 'icon' => 'dashicons-admin-generic', 'page' => 'rls-settings' ],
-            'policy'          => [ 'label' => 'Условия и политика', 'icon' => 'dashicons-media-document', 'page' => 'rls-policy' ],
-        ];
+$rls_section_nav = [
+    'license'         => [ 'label' => 'Лицензия', 'icon' => 'dashicons-admin-network', 'page' => 'rls-license' ],
+    'protection-mode' => [ 'label' => 'Режим защиты', 'icon' => 'dashicons-shield-alt', 'page' => 'rls-protection-mode' ],
+    'firewall'        => [ 'label' => 'Фаервол', 'icon' => 'dashicons-shield', 'page' => 'rls-firewall' ],
+    'blacklist'       => [ 'label' => 'Черный список', 'icon' => 'dashicons-networking', 'page' => 'rls-blacklist' ],
+    'login-security'  => [ 'label' => 'Защита входа', 'icon' => 'dashicons-lock', 'page' => 'rls-login-security' ],
+    'hardening'       => [ 'label' => 'Hardening', 'icon' => 'dashicons-shield-alt', 'page' => 'rls-hardening' ],
+    '2fa'             => [ 'label' => '2FA', 'icon' => 'dashicons-smartphone', 'page' => 'rls-2fa' ],
+    'notifications'   => [ 'label' => 'Уведомления', 'icon' => 'dashicons-email-alt', 'page' => 'rls-notifications' ],
+    'settings'        => [ 'label' => 'Настройки', 'icon' => 'dashicons-admin-generic', 'page' => 'rls-settings' ],
+    'policy'          => [ 'label' => 'Условия и политика', 'icon' => 'dashicons-media-document', 'page' => 'rls-policy' ],
+];
         foreach ( $rls_section_nav as $section_key => $section_item ) :
             $section_url = add_query_arg( 'page', $section_item['page'], admin_url( 'admin.php' ) );
             $section_active = ( $section_key === $rls_settings_section ) || ( $section_key === 'settings' && $rls_settings_section === '' );

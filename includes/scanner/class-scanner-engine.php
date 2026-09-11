@@ -241,15 +241,25 @@ class RLS_Scanner_Engine {
         $content = @file_get_contents( $file_path );
         if ( ! $content ) return [];
         
-        // 3. Загрузка и очистка сигнатур
+        // 3. Загрузка и очистка сигнатур (с кэшированием в object cache)
         if ($signatures === null) {
-            $signatures = get_option( 'rls_base_signatures', [] );
-            if ( get_option( 'rls_license_status' ) === 'valid' ) {
-                $prem = get_option( 'rls_premium_signatures', [] );
-                if ( is_array( $prem ) ) $signatures = array_merge( $signatures, $prem );
+            $cache_key = 'rls_signatures_' . wp_cache_get( 'rls_signatures_version', 'rls' );
+            $signatures = wp_cache_get( $cache_key, 'rls' );
+
+            if ( ! is_array( $signatures ) ) {
+                $signatures = get_option( 'rls_base_signatures', [] );
+                if ( get_option( 'rls_license_status' ) === 'valid' ) {
+                    $prem = get_option( 'rls_premium_signatures', [] );
+                    if ( is_array( $prem ) ) $signatures = array_merge( $signatures, $prem );
+                }
+                $custom = get_option( 'rls_custom_signatures', [] );
+                if ( ! empty( $custom ) ) $signatures = array_merge( $signatures, $custom );
+                wp_cache_set( $cache_key, $signatures, 'rls', HOUR_IN_SECONDS );
+            } else {
+                // Use cached value but still merge custom signatures fresh (frequent changes).
+                $custom = get_option( 'rls_custom_signatures', [] );
+                if ( ! empty( $custom ) ) $signatures = array_merge( $signatures, $custom );
             }
-            $custom = get_option( 'rls_custom_signatures', [] );
-            if ( ! empty( $custom ) ) $signatures = array_merge( $signatures, $custom );
             
             // Фильтрация для удаления $GLOBALS и мусора
             $signatures = array_filter(array_unique($signatures), function($s) {
@@ -372,21 +382,35 @@ class RLS_Scanner_Engine {
     }
 
     public function ajax_neutralize_file() {
-        check_ajax_referer('rls_scanner_nonce', 'nonce'); 
-        $fp = trim(stripslashes($_POST['filepath'] ?? '')); $sig = trim(stripslashes($_POST['signature'] ?? ''));
-        if (empty($fp) || !file_exists($fp)) wp_send_json_error('Файл не найден');
-        
-        require_once( ABSPATH . 'wp-admin/includes/update.php' );
-        $rel = str_replace( ABSPATH, '', $fp ); global $wp_version; $sums = get_core_checksums( $wp_version, get_locale() );
-        if ( isset( $sums[$rel] ) && md5_file($fp) === $sums[$rel] ) {
-            $fpn = wp_normalize_path( $fp );
-            $w = get_option('rls_whitelist', []);
-            $w[$fpn] = [ 'hash' => md5_file($fp), 'mtime' => (int) @filemtime($fp) ];
-            update_option('rls_whitelist', $w);
-            wp_send_json_success(['result' => 'whitelisted']); return;
+        check_ajax_referer('rls_scanner_nonce', 'nonce');
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Доступ запрещен.' );
+        }
+        $fp = trim( wp_unslash( $_POST['filepath'] ?? '' ) );
+        $sig = trim( wp_unslash( $_POST['signature'] ?? '' ) );
+        if ( empty( $fp ) ) {
+            wp_send_json_error( 'Путь не указан.' );
+        }
+        if ( ! $this->is_safe_file_path( $fp ) ) {
+            wp_send_json_error( 'Недопустимый путь.' );
+        }
+        $fp = wp_normalize_path( $fp );
+        if ( ! file_exists( $fp ) ) {
+            wp_send_json_error( 'Файл не найден' );
         }
 
-        $c = file_get_contents($fp);
+        require_once( ABSPATH . 'wp-admin/includes/update.php' );
+        $rel = str_replace( ABSPATH, '', $fp ); global $wp_version; $sums = get_core_checksums( $wp_version, get_locale() );
+        if ( is_array( $sums ) && isset( $sums[$rel] ) && md5_file($fp) === $sums[$rel] ) {
+            $this->add_to_whitelist_safe( $fp );
+            wp_send_json_success(['result' => 'whitelisted']);
+            return;
+        }
+
+        $c = file_get_contents( $fp );
+        if ( $c === false ) {
+            wp_send_json_error( 'Не удалось прочитать файл.' );
+        }
         $max_ai_bytes = 204800;
         if ( class_exists( 'RLS_API_Client' ) && method_exists( 'RLS_API_Client', 'get_ai_snippet_limit_bytes' ) ) {
             $max_ai_bytes = (int) RLS_API_Client::get_ai_snippet_limit_bytes();
@@ -400,19 +424,48 @@ class RLS_Scanner_Engine {
         } else {
             $snip = $c;
         }
+        // SECURITY: free the original content from memory; only the snippet travels.
+        unset( $c );
+
         if(class_exists('RLS_API_Client')) {
             $ai = RLS_API_Client::analyze_code_snippet($snip);
             if(!is_wp_error($ai) && isset($ai['data']['verdict'])) {
-                if($ai['data']['verdict'] === 'Virus') wp_send_json_success(['result' => 'ai_virus', 'snippet' => $snip]);
-                else { 
-                    $fpn = wp_normalize_path( $fp );
-                    $w = get_option('rls_whitelist', []);
-                    $w[$fpn] = [ 'hash' => md5_file($fp), 'mtime' => (int) @filemtime($fp) ];
-                    update_option('rls_whitelist', $w); 
-                    wp_send_json_success(['result' => 'ai_legitimate']); 
+                if($ai['data']['verdict'] === 'Virus') {
+                    wp_send_json_success(['result' => 'ai_virus', 'snippet' => $snip]);
+                } else {
+                    $this->add_to_whitelist_safe( $fp );
+                    wp_send_json_success(['result' => 'ai_legitimate']);
                 }
             } else wp_send_json_error('AI Error');
         } else wp_send_json_error('API Error');
+    }
+
+    /**
+     * Whitelist-safe path check: must be inside ABSPATH/WP_CONTENT_DIR and not
+     * point at the quarantine directory or the plugin itself.
+     */
+    private function is_safe_file_path( $filepath ) {
+        $filepath = wp_normalize_path( (string) $filepath );
+        if ( empty( $filepath ) || strlen( $filepath ) > 1024 ) return false;
+        if ( strpos( $filepath, '..' ) !== false || strpos( $filepath, "\0" ) !== false ) return false;
+        $abspath    = wp_normalize_path( ABSPATH );
+        $wp_content = wp_normalize_path( WP_CONTENT_DIR );
+        $inside_root = ( strpos( $filepath, $abspath ) === 0 || strpos( $filepath, $wp_content ) === 0 );
+        if ( ! $inside_root ) return false;
+        $quarantine = wp_normalize_path( wp_upload_dir()['basedir'] . '/rls-quarantine' );
+        if ( strpos( $filepath, $quarantine ) === 0 ) return false;
+        if ( strpos( $filepath, wp_normalize_path( WP_PLUGIN_DIR . '/rybinsklab-security' ) ) === 0 ) return false;
+        return true;
+    }
+
+    private function add_to_whitelist_safe( $filepath ) {
+        $filepath = wp_normalize_path( $filepath );
+        $w = get_option( 'rls_whitelist', [] );
+        $w[ $filepath ] = [
+            'hash'  => (string) md5_file( $filepath ),
+            'mtime' => (int) @filemtime( $filepath ),
+        ];
+        update_option( 'rls_whitelist', $w, false );
     }
     
     // --- МЕТОДЫ ДЛЯ CRON (ДОБАВЛЕНО) ---

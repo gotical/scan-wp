@@ -77,6 +77,52 @@ class RLS_Firewall {
         add_action( 'send_headers', [ $this, 'send_security_headers' ] );
         add_action( 'template_redirect', [ $this, 'check_404_probing' ] );
         add_action( 'init', [ $this, 'check_xmlrpc' ], 1 );
+        add_action( 'init', [ $this, 'check_hotlink' ], 2 );
+    }
+
+    /**
+     * Hotlink protection: prevent third-party sites from embedding wp-content/uploads
+     * images directly. Always allow:
+     *  - empty referrer (typing URL, bookmarks)
+     *  - same-origin
+     *  - hosts explicitly listed in hotlink_allowed_hosts (newline- or comma-separated)
+     */
+    public function check_hotlink() {
+        $settings = get_option( 'rls_settings', [] );
+        if ( empty( $settings['hotlink_protection'] ) ) return;
+        if ( is_admin() || is_user_logged_in() ) return;
+
+        $uri = wp_parse_url( $_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH );
+        if ( ! is_string( $uri ) ) return;
+        // Only guard the uploads directory.
+        $uploads = wp_upload_dir();
+        if ( empty( $uploads['basedir'] ) || empty( $uploads['baseurl'] ) ) return;
+        $uploads_path = wp_parse_url( $uploads['baseurl'], PHP_URL_PATH );
+        if ( ! is_string( $uploads_path ) || strpos( $uri, $uploads_path ) !== 0 ) return;
+
+        $ref = $_SERVER['HTTP_REFERER'] ?? '';
+        if ( $ref === '' ) return; // Direct load: allow.
+
+        $host = wp_parse_url( $ref, PHP_URL_HOST );
+        if ( ! is_string( $host ) || $host === '' ) return;
+        $site_host = wp_parse_url( home_url(), PHP_URL_HOST );
+
+        if ( $site_host && strcasecmp( $host, $site_host ) === 0 ) return;
+
+        // Custom allowlist (comma/newline separated).
+        $allowed = preg_split( '/[\s,]+/', (string) ( $settings['hotlink_allowed_hosts'] ?? '' ), -1, PREG_SPLIT_NO_EMPTY );
+        foreach ( (array) $allowed as $h ) {
+            if ( strcasecmp( $h, $host ) === 0 ) return;
+        }
+
+        // Block.
+        if ( ! headers_sent() ) {
+            status_header( 403 );
+            header( 'Content-Type: image/png' );
+        }
+        // 1x1 transparent PNG.
+        echo base64_decode( 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=' );
+        exit;
     }
     
     public function send_security_headers() {
@@ -771,11 +817,21 @@ class RLS_Firewall {
     }
 
     private function handle_frontend_diagnostics() {
-        $is_admin_debug = isset( $_GET['rls_geo_test'] ) && current_user_can( 'manage_options' );
+        $is_admin_debug  = isset( $_GET['rls_geo_test'] ) && current_user_can( 'manage_options' );
         $is_public_debug = isset( $_GET['rls_fw_test'] );
 
         if ( ! $is_admin_debug && ! $is_public_debug ) {
             return;
+        }
+
+        // SECURITY: rate-limit the public debug endpoint to prevent IP/GeoIP fingerprinting.
+        if ( $is_public_debug ) {
+            $key = 'rls_pub_dbg_' . md5( $this->client_ip );
+            if ( get_transient( $key ) ) {
+                status_header( 429 );
+                exit;
+            }
+            set_transient( $key, 1, MINUTE_IN_SECONDS );
         }
 
         $settings = get_option( 'rls_settings', [] );

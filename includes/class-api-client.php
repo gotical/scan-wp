@@ -14,9 +14,10 @@ class RLS_API_Client {
     private static function send_request( $body_data, $blocking = true, $timeout = 15 ) {
         $body_data['license_key'] = self::get_license_key();
         $body_data['plugin_version'] = RLS_VERSION;
-        
+
         $settings = get_option( 'rls_settings', [] );
-        $ssl_verify = ! empty( $settings['ssl_verify_api'] );
+        // SECURITY: SSL verification ON by default; admins must explicitly opt-out.
+        $ssl_verify = apply_filters( 'rls_api_ssl_verify', ! empty( $settings['ssl_verify_api'] ) );
 
         $args = [
             'timeout'   => $timeout,
@@ -27,7 +28,7 @@ class RLS_API_Client {
                 'User-Agent' => 'RybinskLabSecurity/' . RLS_VERSION . '; ' . home_url()
             ]
         ];
-        
+
         $response = wp_remote_post( RLS_API_URL, $args );
 
         if ( is_wp_error( $response ) ) {
@@ -99,12 +100,14 @@ class RLS_API_Client {
             'action'         => 'activate_plugin',
             'site_url'       => home_url(),
             'site_title'     => get_bloginfo( 'name' ),
-            'admin_email'    => get_option( 'admin_email' ),
+            // SECURITY: do NOT transmit the admin email — it leaks PII and is not required
+            // for license activation telemetry.
             'plugin_version' => RLS_VERSION,
             'wp_version'     => $wp_version,
             'php_version'    => phpversion(),
-            'server_ip'      => $_SERVER['SERVER_ADDR'] ?? 'unknown',
-            'language'       => get_locale()
+            // SECURITY: server internal IP intentionally omitted to prevent
+            // leaking infrastructure details to a third-party service.
+            'language'       => get_locale(),
         ];
         return self::send_request( $body, true );
     }
