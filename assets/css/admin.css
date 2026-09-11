@@ -2704,3 +2704,18 @@
     }
     .rls-attack-tooltip::after { display: none; }
 }
+
+/* === CORRELATION + REPORTS v2.10.0 === */
+.rls-block-ip {
+    transition: all var(--rls-trans-fast) !important;
+}
+.rls-block-ip:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 12px rgba(220,38,38,0.3) !important;
+}
+
+.rls-report-preview-area {
+    background: var(--rls-surface-alt);
+    border-radius: var(--rls-radius);
+    padding: 16px;
+}
