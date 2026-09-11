@@ -2719,3 +2719,16 @@
     border-radius: var(--rls-radius);
     padding: 16px;
 }
+
+/* === WEBHOOKS v2.11.0 === */
+.rls-wh-test {
+    transition: all var(--rls-trans-fast) !important;
+}
+.rls-wh-test:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+}
+.rls-wh-test:disabled {
+    opacity: 0.5;
+    cursor: wait;
+}

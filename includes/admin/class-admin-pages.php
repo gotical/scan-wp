@@ -82,6 +82,8 @@ class RLS_Admin_Pages {
         add_action( 'wp_ajax_rls_preview_report', [ 'RLS_Reports', 'ajax_preview' ] );
         add_action( 'wp_ajax_rls_send_report_now', [ 'RLS_Reports', 'ajax_send_now' ] );
         add_action( 'wp_ajax_rls_download_report', [ 'RLS_Reports', 'ajax_download_html' ] );
+        // Webhooks.
+        add_action( 'wp_ajax_rls_webhook_test', [ 'RLS_Webhooks', 'ajax_test' ] );
     }
     
     /**
@@ -258,6 +260,15 @@ class RLS_Admin_Pages {
             'manage_options',
             'rls-reports',
             [ $this, 'render_reports_page' ]
+        );
+
+        add_submenu_page(
+            'rls-scanner',
+            'Webhooks',
+            'Webhooks',
+            'manage_options',
+            'rls-webhooks',
+            [ $this, 'render_webhooks_page' ]
         );
 
         // Premium page — CTA for free, showcase for premium.
@@ -557,6 +568,10 @@ class RLS_Admin_Pages {
 
     public function render_reports_page() {
         require_once RLS_PLUGIN_PATH . 'includes/admin/views/reports-page.php';
+    }
+
+    public function render_webhooks_page() {
+        require_once RLS_PLUGIN_PATH . 'includes/admin/views/webhooks-page.php';
     }
 
     /**
