@@ -68,6 +68,11 @@ class RLS_Admin_Pages {
         // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         add_action( 'wp_ajax_rls_sync_stats', [ $this, 'ajax_sync_stats' ] );
         add_action( 'wp_ajax_rls_clear_attack_logs', [ $this, 'ajax_clear_attack_logs' ] );
+        // Protection mode AJAX.
+        add_action( 'wp_ajax_rls_apply_protection_mode', [ $this, 'ajax_apply_protection_mode' ] );
+        add_action( 'wp_ajax_rls_preview_protection_mode', [ $this, 'ajax_preview_protection_mode' ] );
+        add_action( 'wp_ajax_rls_activate_emergency_mode', [ $this, 'ajax_activate_emergency_mode' ] );
+        add_action( 'wp_ajax_rls_deactivate_emergency_mode', [ $this, 'ajax_deactivate_emergency_mode' ] );
     }
     
     /**
@@ -347,7 +352,51 @@ class RLS_Admin_Pages {
     }
 
     public function render_protection_mode_page() {
-        $this->render_settings_section_page( 'protection-mode', 'tab-general' );
+        require RLS_PLUGIN_PATH . 'includes/admin/views/protection-mode-page.php';
+    }
+
+    public function ajax_apply_protection_mode() {
+        check_ajax_referer( 'rls_settings_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( 'Access Denied' );
+        $profile = sanitize_key( $_POST['profile'] ?? '' );
+        $preset  = sanitize_key( $_POST['preset'] ?? '' );
+        if ( ! $profile ) wp_send_json_error( 'Не указан профиль.' );
+        $result = RLS_Mode_Manager::apply_profile( $profile, $preset ? $preset : null );
+        if ( is_wp_error( $result ) ) wp_send_json_error( $result->get_error_message() );
+        wp_send_json_success( [
+            'message' => 'Профиль применён.',
+            'impact'  => $result,
+        ] );
+    }
+
+    public function ajax_preview_protection_mode() {
+        check_ajax_referer( 'rls_settings_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error();
+        $profile = sanitize_key( $_POST['profile'] ?? '' );
+        $preset  = sanitize_key( $_POST['preset'] ?? '' );
+        if ( ! $profile ) wp_send_json_error();
+        $impact = RLS_Mode_Manager::compute_impact_preview( $profile, $preset ? $preset : null );
+        wp_send_json_success( $impact );
+    }
+
+    public function ajax_activate_emergency_mode() {
+        check_ajax_referer( 'rls_settings_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( 'Access Denied' );
+        $mode = sanitize_key( $_POST['mode'] ?? '' );
+        $duration = (int) ( $_POST['duration'] ?? 0 );
+        $result = RLS_Mode_Manager::set_emergency_mode( $mode, $duration > 0 ? $duration : null );
+        if ( is_wp_error( $result ) ) wp_send_json_error( $result->get_error_message() );
+        wp_send_json_success( [
+            'message' => 'Аварийный режим активирован.',
+            'data'    => $result,
+        ] );
+    }
+
+    public function ajax_deactivate_emergency_mode() {
+        check_ajax_referer( 'rls_settings_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error();
+        RLS_Mode_Manager::deactivate_emergency_mode();
+        wp_send_json_success( 'Аварийный режим деактивирован.' );
     }
 
     public function render_firewall_page() {

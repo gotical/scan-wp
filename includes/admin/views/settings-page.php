@@ -367,37 +367,21 @@ $rls_section_nav = [
         <!-- ТАБ 1: ОСНОВНЫЕ -->
         <div class="rls-tab-content active" id="tab-general">
 
+            <!-- Режим защиты управляется на отдельной странице: rls-protection-mode -->
             <div class="rls-box" data-rls-section-box="protection-mode">
                 <h2><span class="dashicons dashicons-shield"></span> Режим работы защиты</h2>
-                <p>Выберите понятный режим работы. Старые настройки не удаляются: при возврате к полному режиму ваши расширенные параметры снова начнут применяться.</p>
-
-                <div class="rls-mode-grid">
-                    <label class="rls-mode-card">
-                        <input type="radio" name="rls_settings[protection_mode]" value="light" <?php checked( $protection_mode, 'light' ); ?> />
-                        <span class="rls-mode-card-title">Легкая защита</span>
-                        <span class="rls-mode-card-text">Базовая защита сайта без фильтрации по языкам, ботам и странам.</span>
-                    </label>
-                    <label class="rls-mode-card">
-                        <input type="radio" name="rls_settings[protection_mode]" value="full" <?php checked( $protection_mode, 'full' ); ?> />
-                        <span class="rls-mode-card-title">Полная защита</span>
-                        <span class="rls-mode-card-text">Доступны все функции плагина: WAF, фильтрация ботов, GeoIP и языковые ограничения.</span>
-                    </label>
-                    <label class="rls-mode-card">
-                        <input type="radio" name="rls_settings[protection_mode]" value="scanner_only" <?php checked( $protection_mode, 'scanner_only' ); ?> />
-                        <span class="rls-mode-card-title">Только сканер вирусов</span>
-                        <span class="rls-mode-card-text">Защитные модули отключены. Плагин работает только как сканер вирусов.</span>
-                    </label>
-                </div>
-
-                <div class="rls-mode-notice" data-rls-mode-notice="full">
-                    <strong>Полная защита:</strong> в этом режиме отображаются и применяются все функции защиты без ограничений по интерфейсу.
-                </div>
-                <div class="rls-mode-notice" data-rls-mode-notice="light">
-                    <strong>Легкая защита:</strong> языковой фильтр, строгая фильтрация поисковых и плохих ботов, а также GeoIP-ограничения автоматически не применяются. Простые проверки доступности страниц и обычный мониторинг сайта пропускаются, но атаки, плохие IP и попытки сканировать уязвимости по-прежнему блокируются.
-                </div>
-                <div class="rls-mode-notice rls-mode-notice-warning" data-rls-mode-notice="scanner_only">
-                    <strong>Защита отключена:</strong> сайт сейчас находится без активного фаервола и защиты входа. Рекомендуем включить легкую или полную защиту. В этом режиме плагин работает только как сканер вирусов.
-                </div>
+                <p>Управление режимами, пресетами и аварийными режимами вынесено на отдельную страницу с предпросмотром изменений.</p>
+                <p>
+                    <a href="<?php echo esc_url( admin_url( 'admin.php?page=rls-protection-mode' ) ); ?>" class="button button-primary">
+                        Открыть управление режимами →
+                    </a>
+                </p>
+                <p style="margin-top:14px; padding:10px 12px; background:var(--rls-surface-alt); border-radius:var(--rls-radius-sm); font-size:13px; color:var(--rls-text-muted);">
+                    <strong style="color:var(--rls-text);">Текущий профиль:</strong> <?php echo esc_html( $protection_mode_ui['label'] ?? 'Стандарт' ); ?>.
+                    <?php if ( function_exists( 'rls_get_protection_mode' ) && rls_get_protection_mode() === 'scanner_only' ) : ?>
+                        <br><span style="color: var(--rls-danger); font-weight: 600;">⚠ Защитные модули отключены.</span>
+                    <?php endif; ?>
+                </p>
             </div>
             
             <div class="rls-box" data-rls-section-box="license">

@@ -155,6 +155,15 @@ class RLS_Firewall {
 
         $this->handle_frontend_diagnostics();
 
+        // Emergency mode: Panic / Lockdown short-circuit normal flow.
+        if ( class_exists( 'RLS_Mode_Manager' ) ) {
+            $emergency = RLS_Mode_Manager::get_active_emergency();
+            if ( $emergency ) {
+                $this->handle_emergency_mode( $emergency );
+                return;
+            }
+        }
+
         if ( $this->is_ip_whitelisted() ) return;
 
         $settings = get_option( 'rls_settings', [] );
@@ -761,6 +770,49 @@ class RLS_Firewall {
         if ( strpos( $uri, '/feed/' ) !== false ) return true;
 
         return false;
+    }
+
+    /**
+     * Handle active emergency mode (Panic / Lockdown).
+     * Always allows wp-admin for whitelisted admin IPs and login attempts.
+     */
+    private function handle_emergency_mode( $emergency ) {
+        $ip = $this->client_ip;
+
+        // Allow whitelisted IPs to bypass emergency mode.
+        if ( $this->is_ip_whitelisted() ) return;
+
+        $whitelist = (array) get_option( 'rls_settings', [] );
+        $whitelist_ips = (array) ( $whitelist['emergency_panic_whitelist'] ?? [] );
+        if ( in_array( $ip, $whitelist_ips, true ) ) return;
+
+        if ( $emergency['mode'] === 'panic' ) {
+            // Panic: block all non-admin requests.
+            $uri = $this->request_uri;
+            $is_admin_path = ( strpos( $uri, '/wp-admin' ) !== false || strpos( $uri, '/wp-login.php' ) !== false );
+            if ( ! $is_admin_path ) {
+                status_header( 503 );
+                header( 'X-RLS-Emergency: panic' );
+                header( 'Retry-After: 3600' );
+                nocache_headers();
+                exit;
+            }
+            return;
+        }
+
+        if ( $emergency['mode'] === 'lockdown' ) {
+            // Lockdown: only allow wp-admin, block everything else.
+            $uri = $this->request_uri;
+            $is_admin_path = ( strpos( $uri, '/wp-admin' ) !== false || strpos( $uri, '/wp-login.php' ) !== false );
+            if ( ! $is_admin_path ) {
+                status_header( 503 );
+                header( 'X-RLS-Emergency: lockdown' );
+                header( 'Retry-After: 7200' );
+                nocache_headers();
+                exit;
+            }
+            return;
+        }
     }
 
     private function block_ip( $reason, $type = null, $permanent = false ) {

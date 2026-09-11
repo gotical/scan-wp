@@ -290,6 +290,7 @@ require_once RLS_PLUGIN_PATH . 'includes/class-anomaly.php';
 require_once RLS_PLUGIN_PATH . 'includes/class-cache-compat.php';
 require_once RLS_PLUGIN_PATH . 'includes/class-health.php';
 require_once RLS_PLUGIN_PATH . 'includes/class-multisite.php';
+require_once RLS_PLUGIN_PATH . 'includes/class-mode-manager.php';
 
 // Core infrastructure
 require_once RLS_PLUGIN_PATH . 'includes/class-api-client.php';

@@ -538,3 +538,179 @@
     }
 
 })(jQuery);
+
+/* =================================================================
+ * 10. PROTECTION MODE UI
+ * ================================================================= */
+(function($) {
+    $(function() {
+        const applyMode = (profile, preset, button) => {
+            const $btn = $(button).prop('disabled', true).text('Применение…');
+            const data = { action: 'rls_apply_protection_mode', nonce: rls_admin_data.settings_nonce, profile };
+            if (preset) data.preset = preset;
+            $.post(rls_admin_data.ajax_url, data)
+                .done((res) => {
+                    if (res && res.success) {
+                        if (window.RLS_Toast) RLS_Toast.success(res.data.message || 'Профиль применён');
+                        setTimeout(() => location.reload(), 600);
+                    } else {
+                        if (window.RLS_Toast) RLS_Toast.danger((res && res.data) || 'Ошибка применения.');
+                        $btn.prop('disabled', false).text('Применить');
+                    }
+                })
+                .fail(() => {
+                    if (window.RLS_Toast) RLS_Toast.danger('Сетевая ошибка');
+                    $btn.prop('disabled', false).text('Применить');
+                });
+        };
+
+        $(document).on('click', '.rls-mode-apply', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const profile = $(this).data('profile');
+            applyMode(profile, null, this);
+        });
+
+        $(document).on('click', '.rls-mode-apply-preset', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const profile = $(this).data('profile');
+            const preset = $(this).data('preset');
+            applyMode(profile, preset, this);
+        });
+
+        // Impact preview modal.
+        let pendingProfile = null, pendingPreset = null;
+
+        $(document).on('click', '.rls-mode-preview', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const profile = $(this).data('profile');
+            const preset = $(this).data('preset');
+            pendingProfile = profile;
+            pendingPreset = preset;
+
+            $('#rls-impact-modal').css('display', 'flex');
+            $('#rls-impact-body').html('<div class="rls-skeleton is-card" style="height:200px;"></div>');
+
+            $.post(rls_admin_data.ajax_url, {
+                action: 'rls_preview_protection_mode',
+                nonce: rls_admin_data.settings_nonce,
+                profile,
+                preset: preset || ''
+            }).done((res) => {
+                if (res && res.success) {
+                    renderImpact(res.data);
+                } else {
+                    $('#rls-impact-body').html('<div class="rls-notice is-danger">Ошибка предпросмотра</div>');
+                }
+            });
+        });
+
+        $(document).on('click', '#rls-impact-cancel', () => {
+            $('#rls-impact-modal').hide();
+            pendingProfile = null; pendingPreset = null;
+        });
+
+        $(document).on('click', '#rls-impact-confirm', () => {
+            $('#rls-impact-modal').hide();
+            if (pendingProfile) {
+                applyMode(pendingProfile, pendingPreset, $('<button>').get(0));
+            }
+        });
+
+        function renderImpact(data) {
+            const enable = (data.will_enable || []).map(m => m.name);
+            const disable = (data.will_disable || []).map(m => m.name);
+            const perf = data.performance || {};
+            const score = data.security_score || 0;
+            const risks = data.risk_notes || [];
+
+            let html = '<div class="rls-impact-section"><h4>Производительность</h4>';
+            html += '<span class="rls-impact-metric"><strong>' + perf.ms + '</strong> на запрос</span>';
+            html += '<span class="rls-impact-metric">Нагрузка: <strong>' + perf.label + '</strong></span>';
+            html += '<span class="rls-impact-metric"><strong>' + score + '/100</strong> Security Score</span>';
+            html += '</div>';
+
+            html += '<div class="rls-impact-section"><h4>Будет включено</h4>';
+            if (enable.length === 0) {
+                html += '<div class="rls-impact-empty">Ничего нового не будет включено</div>';
+            } else {
+                html += '<ul class="rls-impact-list">' + enable.map(n => '<li class="is-enable">✓ ' + escapeHtml(n) + '</li>').join('') + '</ul>';
+            }
+            html += '</div>';
+
+            html += '<div class="rls-impact-section"><h4>Будет выключено</h4>';
+            if (disable.length === 0) {
+                html += '<div class="rls-impact-empty">Ничего не будет выключено</div>';
+            } else {
+                html += '<ul class="rls-impact-list">' + disable.map(n => '<li class="is-disable">✕ ' + escapeHtml(n) + '</li>').join('') + '</ul>';
+            }
+            html += '</div>';
+
+            if (risks.length > 0) {
+                html += '<div class="rls-impact-risks"><h4>⚠ Возможные риски</h4><ul>';
+                risks.forEach(r => { html += '<li>' + escapeHtml(r) + '</li>'; });
+                html += '</ul></div>';
+            }
+            $('#rls-impact-body').html(html);
+        }
+
+        function escapeHtml(text) {
+            if (!text) return text;
+            return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        // Emergency mode activation.
+        $(document).on('click', '.rls-emergency-activate', function(e) {
+            e.preventDefault();
+            const mode = $(this).data('emergency');
+            const duration = $(this).data('duration');
+            $('#rls-emergency-modal').data('mode', mode).data('duration', duration).css('display', 'flex');
+        });
+
+        $(document).on('click', '#rls-emergency-cancel', () => {
+            $('#rls-emergency-modal').hide();
+        });
+
+        $(document).on('click', '#rls-emergency-confirm', function() {
+            const modal = $('#rls-emergency-modal');
+            const mode = modal.data('mode');
+            const duration = modal.data('duration');
+            modal.hide();
+            $.post(rls_admin_data.ajax_url, {
+                action: 'rls_activate_emergency_mode',
+                nonce: rls_admin_data.settings_nonce,
+                mode,
+                duration
+            }).done((res) => {
+                if (res && res.success) {
+                    if (window.RLS_Toast) RLS_Toast.warning(res.data.message || 'Аварийный режим активирован');
+                    setTimeout(() => location.reload(), 600);
+                } else {
+                    if (window.RLS_Toast) RLS_Toast.danger((res && res.data) || 'Ошибка');
+                }
+            });
+        });
+
+        $(document).on('click', '#rls-emergency-disable', function(e) {
+            e.preventDefault();
+            const mode = $(this).data('emergency-mode');
+            if (window.RLS_Confirm) {
+                RLS_Confirm.show({
+                    title: 'Деактивировать аварийный режим?',
+                    message: 'Сайт снова станет доступен для обычных посетителей.',
+                    confirmText: 'Деактивировать',
+                    cancelText: 'Отмена',
+                }).then((ok) => {
+                    if (ok) {
+                        $.post(rls_admin_data.ajax_url, {
+                            action: 'rls_deactivate_emergency_mode',
+                            nonce: rls_admin_data.settings_nonce
+                        }).done(() => location.reload());
+                    }
+                });
+            }
+        });
+    });
+})(jQuery);
