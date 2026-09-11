@@ -1004,6 +1004,17 @@ $rls_section_nav = [
                     Перед очисткой сводка будет отправлена на сервер статистики.
                 </p>
 
+                <!-- Attack type legend with descriptions -->
+                <div class="rls-attack-type-legend" style="margin-bottom:14px;">
+                    <?php foreach ( RLS_Attack_Types::all() as $key => $t ) :
+                        if ( in_array( $key, [ 'unknown' ], true ) ) continue;
+                        echo RLS_Attack_Types::render_badge( $key, false );
+                    endforeach; ?>
+                </div>
+                <p class="description" style="margin-top:-6px;">
+                    <strong>Наведите на тип атаки</strong> чтобы увидеть подробное описание, вектор атаки, пример и рекомендации.
+                </p>
+
                 <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:12px; flex-wrap:wrap; margin: 0 0 14px;">
                     <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin:0;">
                         <label style="display:flex; flex-direction:column; gap:6px; font-weight:600;">
@@ -1037,10 +1048,10 @@ $rls_section_nav = [
                 
                 <table class="wp-list-table widefat striped fixed">
                     <thead>
-                        <tr>
-                            <th style="width: 140px;">Время</th>
+                         <tr>
+                            <th style="width: 130px;">Время</th>
                             <th style="width: 130px;">IP Адрес</th>
-                            <th style="width: 100px;">Тип</th>
+                            <th style="width: 160px;">Тип атаки</th>
                             <th>Причина / Запрос</th>
                         </tr>
                     </thead>
@@ -1048,28 +1059,22 @@ $rls_section_nav = [
                         <?php if ( empty( $logs ) ): ?>
                             <tr><td colspan="4">Журнал пуст. Атак пока не зафиксировано.</td></tr>
                         <?php else: foreach ( $logs as $log ): ?>
-                            <tr>
-                                <td><?php echo date_i18n( 'd.m H:i:s', strtotime( $log['event_date'] ) ); ?></td>
-                                <td>
+                            <tr class="rls-attack-history-row">
+                                <td class="time-col"><?php echo date_i18n( 'd.m H:i:s', strtotime( $log['event_date'] ) ); ?></td>
+                                <td class="ip-col">
                                     <strong><?php echo esc_html( $log['ip'] ); ?></strong>
                                     <br>
                                     <a href="https://2ip.ru/info/<?php echo esc_attr($log['ip']); ?>/" target="_blank" class="button button-small" style="margin-top:5px; font-size:11px; display:inline-flex; align-items:center; gap:3px;">
                                         Whois (2ip) <span class="dashicons dashicons-external" style="font-size:12px; width:12px; height:12px;"></span>
                                     </a>
                                 </td>
-                                <td>
-                                    <?php 
+                                <td class="type-col">
+                                    <?php
                                         $type = strtolower( (string) ( $log['type'] ?? 'unknown' ) );
-                                        $cls = 'gray';
-                                        if ( in_array( $type, [ 'waf', 'virus', 'sqli', 'xss', 'rce', 'lfi' ], true ) ) $cls = 'red';
-                                        if ( in_array( $type, [ 'brute' ], true ) ) $cls = 'orange';
-                                        if ( in_array( $type, [ 'geo' ], true ) ) $cls = 'blue';
-                                        if ( in_array( $type, [ 'blacklist', 'manual', 'language' ], true ) ) $cls = 'purple';
-                                        $label = $log_type_labels[ $type ] ?? strtoupper( $type );
-                                        echo '<span class="rls-badge-log '.$cls.'">'.esc_html( $label ).'</span>';
+                                        echo RLS_Attack_Types::render_badge( $type );
                                     ?>
                                 </td>
-                                <td>
+                                <td class="reason-col">
                                     <span style="color:#d63638; font-weight:600;"><?php echo esc_html( $log['reason'] ); ?></span><br>
                                     <code style="font-size:0.85em; color:#666;"><?php echo esc_html( substr($log['request_uri'], 0, 50) ); ?></code>
                                 </td>

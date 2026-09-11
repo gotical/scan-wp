@@ -1016,3 +1016,28 @@
         }
     });
 })(jQuery);
+
+/* =================================================================
+ * 14. ATTACK TYPE BADGES + HOVER TOOLTIPS (v2.9.0)
+ * ================================================================= */
+(function($) {
+    $(function() {
+        // Render tooltip on hover.
+        $(document).on('mouseenter focus', '[data-rls-attack-type]', function(e) {
+            var el = $(this);
+            if (el.find('.rls-attack-tooltip').length) return;
+            var html = el.attr('data-rls-tooltip-html');
+            if (!html) return;
+            el.css('position', 'relative').append(html);
+            el.addClass('is-tooltip-visible');
+        });
+        $(document).on('mouseleave blur', '[data-rls-attack-type]', function(e) {
+            var el = $(this);
+            el.removeClass('is-tooltip-visible');
+            // Wait for fade-out before removing.
+            setTimeout(function() {
+                el.find('.rls-attack-tooltip').remove();
+            }, 200);
+        });
+    });
+})(jQuery);

@@ -169,6 +169,176 @@ class RLS_Anomaly {
         return $hours;
     }
 
+    /**
+     * Returns day-of-week activity profile for a user (24x7 matrix).
+     */
+    public function get_user_activity_matrix( $user_id, $days = 30 ) {
+        $matrix = [];
+        for ( $dow = 0; $dow < 7; $dow++ ) {
+            for ( $hour = 0; $hour < 24; $hour++ ) {
+                $matrix[ $dow . '-' . $hour ] = 0;
+            }
+        }
+        $known_log = (array) get_user_meta( $user_id, 'rls_known_login_log', true );
+        $since = time() - ( $days * 86400 );
+        foreach ( $known_log as $entry ) {
+            $ts = is_array( $entry ) && isset( $entry['ts'] ) ? (int) $entry['ts'] : 0;
+            if ( $ts < $since || $ts <= 0 ) continue;
+            $dow = (int) gmdate( 'w', $ts );
+            $hour = (int) gmdate( 'G', $ts );
+            $key = $dow . '-' . $hour;
+            $matrix[ $key ] = ( $matrix[ $key ] ?? 0 ) + 1;
+        }
+        return $matrix;
+    }
+
+    /**
+     * Aggregate anomaly score for a user (0-100).
+     * Combines: new IP, unusual hour, multi-IP, day-of-week deviation, UA change.
+     */
+    public function get_user_anomaly_score( $user_id, $days = 30 ) {
+        if ( ! class_exists( 'RLS_Login_Attempts' ) ) return 0;
+        global $wpdb;
+        $table = RLS_Login_Attempts::table();
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT user_id, ip, country_code, user_agent, success, event_date, reason
+             FROM {$table}
+             WHERE user_id = %d AND event_date >= DATE_SUB(%s, INTERVAL %d DAY)
+             ORDER BY id DESC LIMIT 200",
+            $user_id, current_time( 'mysql' ), $days
+        ), ARRAY_A );
+        if ( empty( $rows ) ) return 0;
+
+        $ips = [];
+        $countries = [];
+        $user_agents = [];
+        $hours = [];
+        $dows = [];
+        $failures = 0;
+        $total = count( $rows );
+
+        foreach ( $rows as $r ) {
+            $ips[ $r['ip'] ] = true;
+            if ( $r['country_code'] ) $countries[ $r['country_code'] ] = true;
+            if ( $r['user_agent'] ) $user_agents[ md5( $r['user_agent'] ) ] = true;
+            $hours[] = (int) gmdate( 'G', strtotime( $r['event_date'] ) );
+            $dows[]  = (int) gmdate( 'w', strtotime( $r['event_date'] ) );
+            if ( ! $r['success'] ) $failures++;
+        }
+
+        $score = 0;
+
+        // Diversity signals (each unique adds to score).
+        $score += min( 20, count( $ips ) * 3 );           // Multi-IP
+        $score += min( 15, count( $countries ) * 5 );     // Multi-country
+        $score += min( 10, count( $user_agents ) * 3 );   // Multi-UA
+
+        // Failure ratio.
+        if ( $total > 0 ) {
+            $fail_rate = $failures / $total;
+            $score += min( 25, (int) ( $fail_rate * 50 ) );
+        }
+
+        // Hour distribution entropy (high entropy = unusual pattern).
+        $hour_counts = array_count_values( $hours );
+        if ( count( $hour_counts ) > 1 ) {
+            $entropy = self::shannon_entropy( array_values( $hour_counts ) );
+            $max_entropy = log( 24, 2 );
+            $entropy_norm = $entropy / $max_entropy;
+            $score += min( 15, (int) ( $entropy_norm * 15 ) );
+        }
+
+        // Day-of-week spread (legit users typically log in 5-6 days a week).
+        $unique_dows = count( array_unique( $dows ) );
+        if ( $unique_dows > 7 ) $unique_dows = 7;
+        if ( $unique_dows >= 7 ) $score += 5; // Logging in every day
+        if ( $unique_dows === 1 && $total > 5 ) $score += 10; // Only 1 day a week — suspicious if high count
+
+        return min( 100, $score );
+    }
+
+    private static function shannon_entropy( array $values ) {
+        $total = array_sum( $values );
+        if ( $total <= 0 ) return 0.0;
+        $entropy = 0.0;
+        foreach ( $values as $v ) {
+            if ( $v <= 0 ) continue;
+            $p = $v / $total;
+            $entropy -= $p * log( $p, 2 );
+        }
+        return $entropy;
+    }
+
+    /**
+     * Returns top N users with highest anomaly scores.
+     */
+    public static function get_top_anomalous_users( $limit = 20, $days = 30 ) {
+        if ( ! class_exists( 'RLS_Login_Attempts' ) ) return [];
+        global $wpdb;
+        $table = RLS_Login_Attempts::table();
+        $users = $wpdb->get_results( $wpdb->prepare(
+            "SELECT user_id, COUNT(*) AS attempts,
+                    SUM(success = 0) AS failures,
+                    COUNT(DISTINCT ip) AS unique_ips,
+                    MAX(event_date) AS last_seen
+             FROM {$table}
+             WHERE user_id IS NOT NULL AND event_date >= DATE_SUB(%s, INTERVAL %d DAY)
+             GROUP BY user_id
+             ORDER BY attempts DESC
+             LIMIT %d",
+            current_time( 'mysql' ), $days, $limit
+        ), ARRAY_A );
+
+        $anomaly = new self();
+        foreach ( $users as &$u ) {
+            $u['score'] = $anomaly->get_user_anomaly_score( (int) $u['user_id'], $days );
+            $user_obj = get_userdata( (int) $u['user_id'] );
+            $u['display_name'] = $user_obj ? $user_obj->display_name : '(deleted)';
+            $u['user_email']    = $user_obj ? $user_obj->user_email : '';
+            $u['matrix']        = $anomaly->get_user_activity_matrix( (int) $u['user_id'], $days );
+        }
+        unset( $u );
+        usort( $users, function( $a, $b ) {
+            return $b['score'] - $a['score'];
+        } );
+        return $users;
+    }
+
+    /**
+     * Returns recent anomaly events from the transient log.
+     */
+    public static function get_recent_anomalies( $limit = 50 ) {
+        $list = (array) get_transient( self::TRANSIENT_KEY );
+        return array_slice( $list, -$limit );
+    }
+
+    /**
+     * Aggregates all users' activity into a global 7x24 heatmap.
+     */
+    public static function get_global_activity_heatmap( $days = 30 ) {
+        $matrix = [];
+        for ( $dow = 0; $dow < 7; $dow++ ) {
+            for ( $hour = 0; $hour < 24; $hour++ ) {
+                $matrix[ $dow . '-' . $hour ] = 0;
+            }
+        }
+        if ( ! class_exists( 'RLS_Login_Attempts' ) ) return $matrix;
+        global $wpdb;
+        $table = RLS_Login_Attempts::table();
+        $since = current_time( 'mysql' );
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT event_date FROM {$table}
+             WHERE event_date >= DATE_SUB(%s, INTERVAL %d DAY)",
+            $since, $days
+        ), ARRAY_A );
+        foreach ( $rows as $r ) {
+            $dow = (int) gmdate( 'w', strtotime( $r['event_date'] ) );
+            $hour = (int) gmdate( 'G', strtotime( $r['event_date'] ) );
+            $matrix[ $dow . '-' . $hour ]++;
+        }
+        return $matrix;
+    }
+
     public function render_warning_message( $msg ) {
         $dismissed = (int) ( $_COOKIE['rls_anomaly_dismissed'] ?? 0 );
         $list = (array) get_transient( self::TRANSIENT_KEY );

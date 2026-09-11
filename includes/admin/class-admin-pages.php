@@ -220,6 +220,24 @@ class RLS_Admin_Pages {
             [ $this, 'render_analytics_page' ]
         );
 
+        add_submenu_page(
+            'rls-scanner',
+            'Карта атак',
+            'Карта атак',
+            'manage_options',
+            'rls-attack-map',
+            [ $this, 'render_attack_map_page' ]
+        );
+
+        add_submenu_page(
+            'rls-scanner',
+            'Anomaly',
+            'Anomaly',
+            'manage_options',
+            'rls-anomaly',
+            [ $this, 'render_anomaly_page' ]
+        );
+
         // Premium page — CTA for free, showcase for premium.
         add_submenu_page(
             'rls-scanner',
@@ -501,6 +519,14 @@ class RLS_Admin_Pages {
     public function render_analytics_page() {
         $analytics = new RLS_Analytics_Page();
         $analytics->render_page();
+    }
+
+    public function render_attack_map_page() {
+        require_once RLS_PLUGIN_PATH . 'includes/admin/views/world-map.php';
+    }
+
+    public function render_anomaly_page() {
+        require_once RLS_PLUGIN_PATH . 'includes/admin/views/anomaly-heatmap.php';
     }
 
     /**

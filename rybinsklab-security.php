@@ -3,7 +3,7 @@
  * Plugin Name:       Rybinsk Lab Security
  * Plugin URI:        https://rybinsklab.ru/scan-wp/
  * Description:       Комплексная защита WordPress: WAF, глобальный черный список IP, сканер, защита входа и журнал атак.
- * Version:           2.8.0
+ * Version:           2.9.0
  * Author:            Усачёв Денис
  * Author URI:        https://rybinsklab.ru/
  * License:           GPL v2 or later
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
  */
-define( 'RLS_VERSION', '2.8.0' );
+define( 'RLS_VERSION', '2.9.0' );
 define( 'RLS_API_URL', 'https://rybinsklab.ru/scan-wp/api/index.php' );
 define( 'RLS_PLUGIN_FILE', __FILE__ );
 define( 'RLS_PLUGIN_PATH', plugin_dir_path( __FILE__ ) );
@@ -283,6 +283,8 @@ require_once RLS_PLUGIN_PATH . 'includes/class-hardening.php';
 require_once RLS_PLUGIN_PATH . 'includes/class-captcha.php';
 require_once RLS_PLUGIN_PATH . 'includes/class-login-attempts.php';
 require_once RLS_PLUGIN_PATH . 'includes/class-attack-analytics.php';
+require_once RLS_PLUGIN_PATH . 'includes/class-attack-types.php';
+require_once RLS_PLUGIN_PATH . 'includes/class-attack-map.php';
 require_once RLS_PLUGIN_PATH . 'includes/class-2fa.php';
 require_once RLS_PLUGIN_PATH . 'includes/class-notifications.php';
 require_once RLS_PLUGIN_PATH . 'includes/class-antispam.php';

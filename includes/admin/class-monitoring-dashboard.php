@@ -93,8 +93,8 @@ class RLS_Monitoring_Dashboard {
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px;">
                 <div class="rls-box">
                     <h2><span class="dashicons dashicons-networking"></span> Top-10 атакующих IP</h2>
-                    <table class="wp-list-table widefat striped" id="rls-table-top-ips">
-                        <thead><tr><th>IP</th><th>Тип</th><th>Событий</th></tr></thead>
+                    <table class="wp-list-table widefat striped rls-attack-history-table" id="rls-table-top-ips">
+                        <thead><tr><th>IP</th><th>Тип атаки</th><th>Событий</th></tr></thead>
                         <tbody>
                             <?php for ( $i = 0; $i < 5; $i++ ) : ?>
                                 <tr><td colspan="3"><div class="rls-skeleton is-text" style="width:80%;"></div></td></tr>
