@@ -17,13 +17,13 @@ class RLS_Admin_Pages {
      * пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ.
      */
     public function init() {
-        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+        // Register all admin pages.
         add_action( 'admin_menu', [ $this, 'setup_admin_menu' ] );
-        
-        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+
+        // Enqueue assets.
         add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_admin_assets' ] );
-        
-        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
+
+        // Settings + activation redirect.
         add_action( 'admin_init', [ $this, 'initialize_settings' ] );
         add_action( 'admin_init', [ $this, 'maybe_redirect_after_activation' ] );
         
@@ -114,28 +114,30 @@ class RLS_Admin_Pages {
     }
 
     /**
-     * пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ.
+     * Register all admin menu pages with logical grouping.
+     * Groups: SETUP, PROTECTION, SCANNER, ANALYTICS, INTEGRATIONS, SYSTEM.
      */
     public function setup_admin_menu() {
-        add_menu_page( 
-            'Rybinsk Lab Security', 
-            'RL Security', 
-            'manage_options', 
-            'rls-scanner', 
-            [ $this, 'render_scanner_page' ], 
-            'dashicons-shield-alt', 
-            26 
+        add_menu_page(
+            'Rybinsk Lab Security',
+            'RL Security',
+            'manage_options',
+            'rls-scanner',
+            [ $this, 'render_scanner_page' ],
+            'dashicons-shield-alt',
+            26
         );
         
-        add_submenu_page( 
-            'rls-scanner', 
-            'Сканер', 
-            'Сканер', 
-            'manage_options', 
-            'rls-scanner', 
-            [ $this, 'render_scanner_page' ] 
+        add_submenu_page(
+            'rls-scanner',
+            'Сканер',
+            'Сканер',
+            'manage_options',
+            'rls-scanner',
+            [ $this, 'render_scanner_page' ]
         );
 
+        // ──── GROUP 1: НАСТРОЙКА ────
         add_submenu_page(
             'rls-scanner',
             'Лицензия',
@@ -144,61 +146,6 @@ class RLS_Admin_Pages {
             'rls-license',
             [ $this, 'render_license_page' ]
         );
-
-        add_submenu_page(
-            'rls-scanner',
-            'Режим защиты',
-            'Режим защиты',
-            'manage_options',
-            'rls-protection-mode',
-            [ $this, 'render_protection_mode_page' ]
-        );
-
-        add_submenu_page(
-            'rls-scanner',
-            'Фаервол',
-            'Фаервол',
-            'manage_options',
-            'rls-firewall',
-            [ $this, 'render_firewall_page' ]
-        );
-
-        add_submenu_page(
-            'rls-scanner',
-            'Черный список',
-            'Черный список',
-            'manage_options',
-            'rls-blacklist',
-            [ $this, 'render_blacklist_page' ]
-        );
-
-        add_submenu_page(
-            'rls-scanner',
-            'Защита входа',
-            'Защита входа',
-            'manage_options',
-            'rls-login-security',
-            [ $this, 'render_login_security_page' ]
-        );
-
-        add_submenu_page( 
-            'rls-scanner', 
-            'Настройки', 
-            'Настройки', 
-            'manage_options', 
-            'rls-settings', 
-            [ $this, 'render_settings_page' ] 
-        );
-
-        add_submenu_page(
-            'rls-scanner',
-            'Мониторинг',
-            'Мониторинг',
-            'manage_options',
-            'rls-monitoring',
-            [ $this, 'render_monitoring_page' ]
-        );
-
         add_submenu_page(
             'rls-scanner',
             'Мастер настройки',
@@ -207,71 +154,14 @@ class RLS_Admin_Pages {
             'rls-wizard',
             [ $this, 'render_wizard_page' ]
         );
-
         add_submenu_page(
             'rls-scanner',
-            'CAPTCHA',
-            'CAPTCHA',
+            'Режим защиты',
+            'Режим защиты',
             'manage_options',
-            'rls-captcha',
-            [ $this, 'render_captcha_page' ]
+            'rls-protection-mode',
+            [ $this, 'render_protection_mode_page' ]
         );
-
-        add_submenu_page(
-            'rls-scanner',
-            'Аналитика',
-            'Аналитика',
-            'manage_options',
-            'rls-analytics',
-            [ $this, 'render_analytics_page' ]
-        );
-
-        add_submenu_page(
-            'rls-scanner',
-            'Карта атак',
-            'Карта атак',
-            'manage_options',
-            'rls-attack-map',
-            [ $this, 'render_attack_map_page' ]
-        );
-
-        add_submenu_page(
-            'rls-scanner',
-            'Anomaly',
-            'Anomaly',
-            'manage_options',
-            'rls-anomaly',
-            [ $this, 'render_anomaly_page' ]
-        );
-
-        add_submenu_page(
-            'rls-scanner',
-            'Корреляция',
-            'Корреляция',
-            'manage_options',
-            'rls-correlation',
-            [ $this, 'render_correlation_page' ]
-        );
-
-        add_submenu_page(
-            'rls-scanner',
-            'Отчёты',
-            'Отчёты',
-            'manage_options',
-            'rls-reports',
-            [ $this, 'render_reports_page' ]
-        );
-
-        add_submenu_page(
-            'rls-scanner',
-            'Webhooks',
-            'Webhooks',
-            'manage_options',
-            'rls-webhooks',
-            [ $this, 'render_webhooks_page' ]
-        );
-
-        // Premium page — CTA for free, showcase for premium.
         add_submenu_page(
             'rls-scanner',
             'Premium',
@@ -281,24 +171,15 @@ class RLS_Admin_Pages {
             [ $this, 'render_premium_page' ]
         );
 
+        // ──── GROUP 2: ЗАЩИТА ────
         add_submenu_page(
             'rls-scanner',
-            'Диагностика',
-            'Диагностика',
+            'Фаервол',
+            'Фаервол',
             'manage_options',
-            'rls-health',
-            [ $this, 'render_health_page' ]
+            'rls-firewall',
+            [ $this, 'render_firewall_page' ]
         );
-
-        add_submenu_page(
-            'rls-scanner',
-            'Условия и политика',
-            'Условия и политика',
-            'manage_options',
-            'rls-policy',
-            [ $this, 'render_policy_page' ]
-        );
-
         add_submenu_page(
             'rls-scanner',
             'Hardening',
@@ -307,7 +188,22 @@ class RLS_Admin_Pages {
             'rls-hardening',
             [ $this, 'render_hardening_page' ]
         );
-
+        add_submenu_page(
+            'rls-scanner',
+            'Черный список',
+            'Черный список',
+            'manage_options',
+            'rls-blacklist',
+            [ $this, 'render_blacklist_page' ]
+        );
+        add_submenu_page(
+            'rls-scanner',
+            'Защита входа',
+            'Защита входа',
+            'manage_options',
+            'rls-login-security',
+            [ $this, 'render_login_security_page' ]
+        );
         add_submenu_page(
             'rls-scanner',
             '2FA',
@@ -316,7 +212,84 @@ class RLS_Admin_Pages {
             'rls-2fa',
             [ $this, 'render_2fa_page' ]
         );
+        add_submenu_page(
+            'rls-scanner',
+            'CAPTCHA',
+            'CAPTCHA',
+            'manage_options',
+            'rls-captcha',
+            [ $this, 'render_captcha_page' ]
+        );
 
+        // ──── GROUP 3: СКАНЕР + МОНИТОРИНГ ────
+        add_submenu_page(
+            'rls-scanner',
+            'Настройки',
+            'Настройки',
+            'manage_options',
+            'rls-settings',
+            [ $this, 'render_settings_page' ]
+        );
+        add_submenu_page(
+            'rls-scanner',
+            'Мониторинг',
+            'Мониторинг',
+            'manage_options',
+            'rls-monitoring',
+            [ $this, 'render_monitoring_page' ]
+        );
+        add_submenu_page(
+            'rls-scanner',
+            'Anomaly',
+            'Anomaly',
+            'manage_options',
+            'rls-anomaly',
+            [ $this, 'render_anomaly_page' ]
+        );
+
+        // ──── GROUP 4: АНАЛИТИКА ────
+        add_submenu_page(
+            'rls-scanner',
+            'Аналитика',
+            'Аналитика',
+            'manage_options',
+            'rls-analytics',
+            [ $this, 'render_analytics_page' ]
+        );
+        add_submenu_page(
+            'rls-scanner',
+            'Карта атак',
+            'Карта атак',
+            'manage_options',
+            'rls-attack-map',
+            [ $this, 'render_attack_map_page' ]
+        );
+        add_submenu_page(
+            'rls-scanner',
+            'Корреляция',
+            'Корреляция',
+            'manage_options',
+            'rls-correlation',
+            [ $this, 'render_correlation_page' ]
+        );
+        add_submenu_page(
+            'rls-scanner',
+            'Отчёты',
+            'Отчёты',
+            'manage_options',
+            'rls-reports',
+            [ $this, 'render_reports_page' ]
+        );
+
+        // ──── GROUP 5: ИНТЕГРАЦИИ + УВЕДОМЛЕНИЯ ────
+        add_submenu_page(
+            'rls-scanner',
+            'Webhooks',
+            'Webhooks',
+            'manage_options',
+            'rls-webhooks',
+            [ $this, 'render_webhooks_page' ]
+        );
         add_submenu_page(
             'rls-scanner',
             'Уведомления',
@@ -325,10 +298,28 @@ class RLS_Admin_Pages {
             'rls-notifications',
             [ $this, 'render_notifications_page' ]
         );
+
+        // ──── GROUP 6: СИСТЕМА ────
+        add_submenu_page(
+            'rls-scanner',
+            'Диагностика',
+            'Диагностика',
+            'manage_options',
+            'rls-health',
+            [ $this, 'render_health_page' ]
+        );
+        add_submenu_page(
+            'rls-scanner',
+            'Условия и политика',
+            'Условия и политика',
+            'manage_options',
+            'rls-policy',
+            [ $this, 'render_policy_page' ]
+        );
     }
-    
+
     /**
-     * пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ CSS пїЅ JS пїЅпїЅпїЅпїЅпїЅпїЅ.
+     * Enqueue CSS/JS for admin pages.
      */
     public function enqueue_admin_assets( $hook_suffix ) {
         if ( strpos( $hook_suffix, 'rls-' ) === false && $hook_suffix !== 'plugins.php' ) {
