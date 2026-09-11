@@ -75,6 +75,9 @@ class RLS_Admin_Pages {
         add_action( 'wp_ajax_rls_deactivate_emergency_mode', [ $this, 'ajax_deactivate_emergency_mode' ] );
         // CAPTCHA.
         add_action( 'wp_ajax_rls_captcha_test', [ 'RLS_Captcha', 'ajax_test' ] );
+        // Analytics.
+        add_action( 'wp_ajax_rls_get_analytics', [ 'RLS_Analytics_Page', 'ajax_data' ] );
+        add_action( 'wp_ajax_rls_export_attacks', [ 'RLS_Analytics_Page', 'ajax_export_attacks' ] );
     }
     
     /**
@@ -206,6 +209,15 @@ class RLS_Admin_Pages {
             'manage_options',
             'rls-captcha',
             [ $this, 'render_captcha_page' ]
+        );
+
+        add_submenu_page(
+            'rls-scanner',
+            'Аналитика',
+            'Аналитика',
+            'manage_options',
+            'rls-analytics',
+            [ $this, 'render_analytics_page' ]
         );
 
         // Premium page — CTA for free, showcase for premium.
@@ -484,6 +496,11 @@ class RLS_Admin_Pages {
             echo '<div class="rls-notice is-success" style="margin:14px 0;">CAPTCHA настройки сохранены.</div>';
         }
         require_once RLS_PLUGIN_PATH . 'includes/admin/views/captcha-page.php';
+    }
+
+    public function render_analytics_page() {
+        $analytics = new RLS_Analytics_Page();
+        $analytics->render_page();
     }
 
     /**

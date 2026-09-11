@@ -160,10 +160,35 @@ class RLS_Activator {
             reason varchar(255) NOT NULL,
             request_uri varchar(255) DEFAULT '' NOT NULL,
             user_agent varchar(255) DEFAULT '' NOT NULL,
+            country_code varchar(2) DEFAULT '' NOT NULL,
             PRIMARY KEY  (id),
-            KEY event_date (event_date)
+            KEY event_date (event_date),
+            KEY ip (ip),
+            KEY type (type)
         ) $charset_collate;";
         dbDelta( $sql_log );
+
+        // 3. Таблица попыток входа (Login Attempts Analytics)
+        $table_login = $wpdb->prefix . 'rls_login_attempts';
+        $sql_login = "CREATE TABLE $table_login (
+            id bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+            event_date datetime DEFAULT '0000-00-00 00:00:00' NOT NULL,
+            user_login varchar(255) NOT NULL DEFAULT '',
+            user_id bigint(20) UNSIGNED NULL,
+            ip varchar(45) NOT NULL DEFAULT '',
+            country_code varchar(2) DEFAULT '',
+            user_agent varchar(512) DEFAULT '',
+            referer varchar(512) DEFAULT '',
+            success tinyint(1) NOT NULL DEFAULT 0,
+            reason varchar(64) DEFAULT '',
+            captcha_status varchar(32) DEFAULT '',
+            PRIMARY KEY  (id),
+            KEY event_date (event_date),
+            KEY ip (ip),
+            KEY user_login (user_login),
+            KEY success (success)
+        ) $charset_collate;";
+        dbDelta( $sql_login );
     }
     
     public static function setup_options() {

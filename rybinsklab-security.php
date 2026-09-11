@@ -3,7 +3,7 @@
  * Plugin Name:       Rybinsk Lab Security
  * Plugin URI:        https://rybinsklab.ru/scan-wp/
  * Description:       Комплексная защита WordPress: WAF, глобальный черный список IP, сканер, защита входа и журнал атак.
- * Version:           2.7.0
+ * Version:           2.8.0
  * Author:            Усачёв Денис
  * Author URI:        https://rybinsklab.ru/
  * License:           GPL v2 or later
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
  */
-define( 'RLS_VERSION', '2.7.0' );
+define( 'RLS_VERSION', '2.8.0' );
 define( 'RLS_API_URL', 'https://rybinsklab.ru/scan-wp/api/index.php' );
 define( 'RLS_PLUGIN_FILE', __FILE__ );
 define( 'RLS_PLUGIN_PATH', plugin_dir_path( __FILE__ ) );
@@ -281,6 +281,8 @@ require_once RLS_PLUGIN_PATH . 'includes/class-firewall.php';
 require_once RLS_PLUGIN_PATH . 'includes/class-login-security.php';
 require_once RLS_PLUGIN_PATH . 'includes/class-hardening.php';
 require_once RLS_PLUGIN_PATH . 'includes/class-captcha.php';
+require_once RLS_PLUGIN_PATH . 'includes/class-login-attempts.php';
+require_once RLS_PLUGIN_PATH . 'includes/class-attack-analytics.php';
 require_once RLS_PLUGIN_PATH . 'includes/class-2fa.php';
 require_once RLS_PLUGIN_PATH . 'includes/class-notifications.php';
 require_once RLS_PLUGIN_PATH . 'includes/class-antispam.php';
@@ -313,6 +315,7 @@ require_once RLS_PLUGIN_PATH . 'includes/scanner/class-scanner-engine.php';
 require_once RLS_PLUGIN_PATH . 'includes/admin/class-admin-pages.php';
 require_once RLS_PLUGIN_PATH . 'includes/admin/class-dashboard-widget.php';
 require_once RLS_PLUGIN_PATH . 'includes/admin/class-monitoring-dashboard.php';
+require_once RLS_PLUGIN_PATH . 'includes/admin/class-analytics-page.php';
 
 /**
  * пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
@@ -341,6 +344,9 @@ function rls_run_plugin(): void {
 
     // CAPTCHA module (Google reCAPTCHA / Yandex SmartCaptcha)
     ( new RLS_Captcha() )->init();
+
+    // Login attempts tracker (success/failure analytics)
+    ( new RLS_Login_Attempts() )->init();
 
     // Login protection (brute force, honeypot, captcha)
     ( new RLS_Login_Security() )->init();
@@ -391,6 +397,7 @@ function rls_run_plugin(): void {
         ( new RLS_Scanner_Engine() )->init();
         ( new RLS_Dashboard_Widget() )->init();
         ( new RLS_Monitoring_Dashboard() )->init();
+        ( new RLS_Analytics_Page() )->init();
     }
 }
 

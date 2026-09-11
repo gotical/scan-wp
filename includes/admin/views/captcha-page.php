@@ -246,6 +246,72 @@ $enabled    = RLS_Captcha::is_enabled();
     </table>
 </div>
 
+<?php $wc_active = class_exists( 'WooCommerce' ); ?>
+<?php if ( $wc_active ) : ?>
+<!-- WooCommerce -->
+<div class="rls-box">
+    <h2><span class="dashicons dashicons-cart"></span> WooCommerce</h2>
+    <p>Защита форм WooCommerce: оформление заказа, регистрация, вход, отзывы.</p>
+
+    <table class="form-table">
+        <tr>
+            <th>Оформление заказа</th>
+            <td>
+                <label class="rls-toggle">
+                    <input type="checkbox" name="rls_captcha_settings[forms][wc_checkout]" value="1" <?php checked( 1, $s['forms']['wc_checkout'] ?? 0 ); ?> />
+                    <span class="rls-toggle-slider"></span>
+                </label>
+                <span class="description">Страница /checkout перед кнопкой "Оформить заказ"</span>
+            </td>
+        </tr>
+        <tr>
+            <th>Регистрация (My Account)</th>
+            <td>
+                <label class="rls-toggle">
+                    <input type="checkbox" name="rls_captcha_settings[forms][wc_register]" value="1" <?php checked( 1, $s['forms']['wc_register'] ?? 0 ); ?> />
+                    <span class="rls-toggle-slider"></span>
+                </label>
+                <span class="description">/my-account/?action=register</span>
+            </td>
+        </tr>
+        <tr>
+            <th>Вход (My Account)</th>
+            <td>
+                <label class="rls-toggle">
+                    <input type="checkbox" name="rls_captcha_settings[forms][wc_login]" value="1" <?php checked( 1, $s['forms']['wc_login'] ?? 0 ); ?> />
+                    <span class="rls-toggle-slider"></span>
+                </label>
+                <span class="description">/my-account/?action=login (если не включён wp-login)</span>
+            </td>
+        </tr>
+        <tr>
+            <th>Восстановление пароля</th>
+            <td>
+                <label class="rls-toggle">
+                    <input type="checkbox" name="rls_captcha_settings[forms][wc_lostpassword]" value="1" <?php checked( 1, $s['forms']['wc_lostpassword'] ?? 0 ); ?> />
+                    <span class="rls-toggle-slider"></span>
+                </label>
+            </td>
+        </tr>
+        <tr>
+            <th>Отзывы о товарах</th>
+            <td>
+                <label class="rls-toggle">
+                    <input type="checkbox" name="rls_captcha_settings[forms][wc_review]" value="1" <?php checked( 1, $s['forms']['wc_review'] ?? 0 ); ?> />
+                    <span class="rls-toggle-slider"></span>
+                </label>
+                <span class="description">CAPTCHA на форме отзывов WooCommerce</span>
+            </td>
+        </tr>
+    </table>
+</div>
+<?php else : ?>
+<div class="rls-box" style="opacity: 0.5;">
+    <h2><span class="dashicons dashicons-cart"></span> WooCommerce</h2>
+    <p>Плагин WooCommerce не обнаружен. Установите WooCommerce для защиты форм заказа, регистрации и отзывов.</p>
+</div>
+<?php endif; ?>
+
 <!-- Test -->
 <div class="rls-box" style="border-left: 4px solid var(--rls-primary);">
     <h2><span class="dashicons dashicons-controls-play"></span> Тест CAPTCHA</h2>

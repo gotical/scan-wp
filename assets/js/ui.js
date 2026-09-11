@@ -958,3 +958,61 @@
         }
     });
 })(jQuery);
+
+/* =================================================================
+ * 13. ANALYTICS PAGE v2.8.0
+ * ================================================================= */
+(function($) {
+    $(function() {
+        const daysSelect = document.getElementById('rls-analytics-days');
+        if (daysSelect) {
+            daysSelect.addEventListener('change', function() {
+                window.location.href = '?page=rls-analytics&rls_days=' + this.value;
+            });
+        }
+
+        const analyticsContainer = document.getElementById('rls-analytics-heatmap');
+        if (analyticsContainer) {
+            const days = daysSelect ? daysSelect.value : 7;
+            $.post(rls_admin_data.ajax_url, {
+                action: 'rls_get_analytics',
+                nonce: rls_admin_data.monitoring_nonce,
+                days
+            }).done((res) => {
+                if (res && res.success) {
+                    if (typeof RLS_setupCharts === 'function') {
+                        RLS_setupCharts(res.data);
+                    }
+                    renderHeatmap(res.data.hour_heatmap || []);
+                }
+            });
+        }
+
+        function renderHeatmap(cells) {
+            if (!analyticsContainer) return;
+            const map = {};
+            let max = 0;
+            cells.forEach(c => {
+                const key = c.dow + '-' + c.hour;
+                map[key] = c.attacks;
+                max = Math.max(max, c.attacks);
+            });
+            analyticsContainer.innerHTML = '';
+            const dowNames = ['', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+            for (let dow = 1; dow <= 7; dow++) {
+                for (let hour = 0; hour < 24; hour++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'rls-analytics-heatmap-cell';
+                    cell.title = dowNames[dow] + ' ' + hour + ':00 — ' + (map[dow + '-' + hour] || 0) + ' атак';
+                    const v = map[dow + '-' + hour] || 0;
+                    const intensity = max > 0 ? (v / max) : 0;
+                    const bg = intensity === 0
+                        ? 'rgba(0,0,0,0.04)'
+                        : 'rgba(220, 38, 38, ' + (0.15 + intensity * 0.85).toFixed(2) + ')';
+                    cell.style.background = bg;
+                    analyticsContainer.appendChild(cell);
+                }
+            }
+        }
+    });
+})(jQuery);

@@ -2503,3 +2503,16 @@
     color: var(--rls-text-subtle);
     font-style: italic;
 }
+
+/* === ANALYTICS v2.8.0 === */
+.rls-analytics-heatmap-cell {
+    aspect-ratio: 1;
+    border-radius: 2px;
+    min-height: 16px;
+    transition: all var(--rls-trans-fast);
+    cursor: pointer;
+}
+.rls-analytics-heatmap-cell:hover {
+    outline: 2px solid var(--rls-primary);
+    transform: scale(1.4);
+}

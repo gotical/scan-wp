@@ -53,6 +53,12 @@ class RLS_Captcha {
                 'lostpassword'    => 0,
                 'resetpassword'   => 0,
                 'admin_login'     => 0,    // legacy from v2.3
+                // WooCommerce (v2.8.0+).
+                'wc_checkout'     => 0,
+                'wc_register'     => 0,
+                'wc_login'        => 0,
+                'wc_lostpassword' => 0,
+                'wc_review'       => 0,
             ],
         ];
         $stored = get_option( self::OPT_SETTINGS, [] );
@@ -391,6 +397,20 @@ class RLS_Captcha {
         add_action( 'lostpassword_post', [ $this, 'verify_lostpassword' ], 10, 1 );
         add_action( 'validate_password_reset', [ $this, 'verify_resetpassword' ], 10, 2 );
         add_filter( 'preprocess_comment', [ $this, 'verify_comment' ], 10, 1 );
+
+        // WooCommerce integration (only if WC is active).
+        if ( class_exists( 'WooCommerce' ) ) {
+            add_action( 'woocommerce_checkout_billing', [ $this, 'render_wc_checkout' ], 20 );
+            add_action( 'woocommerce_review_order_before_submit', [ $this, 'render_wc_checkout' ], 20 );
+            add_action( 'woocommerce_register_form', [ $this, 'render_wc_register' ], 20 );
+            add_action( 'woocommerce_login_form', [ $this, 'render_wc_login' ], 20 );
+            add_action( 'woocommerce_lostpassword_form', [ $this, 'render_wc_lostpassword' ], 20 );
+            add_action( 'comment_form_before_fields' === 'comment_form_before_fields' ? 'comment_form_top' : 'comment_form_top', [ $this, 'render_wc_review_proxy' ] );
+            add_filter( 'woocommerce_process_registration_errors', [ $this, 'verify_wc_register' ], 10, 3 );
+            add_action( 'woocommerce_checkout_process', [ $this, 'verify_wc_checkout' ], 10, 1 );
+            add_filter( 'woocommerce_login_credentials', [ $this, 'verify_wc_login' ], 10, 1 );
+            add_filter( 'preprocess_comment', [ $this, 'verify_wc_review' ], 20, 1 );
+        }
     }
 
     /* Render callbacks */
@@ -482,5 +502,77 @@ class RLS_Captcha {
             wp_send_json_error( $result->get_error_message() );
         }
         wp_send_json_success( 'CAPTCHA verification passed.' );
+    }
+
+    /* === WooCommerce integration (v2.8.0) === */
+
+    public function render_wc_checkout()       { echo self::render( 'wc_checkout' ); }
+    public function render_wc_register()       { echo self::render( 'wc_register' ); }
+    public function render_wc_login()         { echo self::render( 'wc_login' ); }
+    public function render_wc_lostpassword()  { echo self::render( 'wc_lostpassword' ); }
+    public function render_wc_review_proxy()  { echo self::render( 'wc_review' ); }
+
+    /**
+     * Verify CAPTCHA on WooCommerce checkout before order is processed.
+     */
+    public function verify_wc_checkout() {
+        if ( ! self::is_form_enabled( 'wc_checkout' ) ) return;
+        if ( $_SERVER['REQUEST_METHOD'] !== 'POST' ) return;
+        $token = self::get_post_token();
+        $result = self::verify_token( $token );
+        if ( is_wp_error( $result ) ) {
+            wc_add_notice( $result->get_error_message(), 'error' );
+            // Prevent checkout from completing by removing the order ID that would be set.
+            remove_action( 'woocommerce_checkout_order_processed', 'woocommerce_payment_complete' );
+        }
+    }
+
+    /**
+     * Verify CAPTCHA on WooCommerce registration.
+     */
+    public function verify_wc_register( $username, $email, $errors ) {
+        if ( ! self::is_form_enabled( 'wc_register' ) ) return $errors;
+        if ( $_SERVER['REQUEST_METHOD'] !== 'POST' ) return $errors;
+        $token = self::get_post_token();
+        $result = self::verify_token( $token );
+        if ( is_wp_error( $result ) ) {
+            $errors->add( 'rls_captcha_failed', $result->get_error_message(), 'error' );
+        }
+        return $errors;
+    }
+
+    /**
+     * Verify CAPTCHA on WooCommerce login (legacy filter).
+     * Modern WC login also goes through wp_authenticate which we already cover.
+     */
+    public function verify_wc_login( $credentials ) {
+        if ( ! self::is_form_enabled( 'wc_login' ) ) return $credentials;
+        if ( $_SERVER['REQUEST_METHOD'] !== 'POST' ) return $credentials;
+        // Avoid double-checking if main authenticate filter will handle it.
+        if ( self::is_form_enabled( 'login' ) ) return $credentials;
+        $token = self::get_post_token();
+        $result = self::verify_token( $token );
+        if ( is_wp_error( $result ) ) {
+            wp_die( esc_html( $result->get_error_message() ), esc_html__( 'CAPTCHA Error', 'rybinsklab-security' ), [ 'response' => 403 ] );
+        }
+        return $credentials;
+    }
+
+    /**
+     * Verify CAPTCHA on WooCommerce product review submission.
+     * Hooks into preprocess_comment at priority 20 (after main comment check).
+     */
+    public function verify_wc_review( $commentdata ) {
+        if ( ! self::is_form_enabled( 'wc_review' ) ) return $commentdata;
+        // Only enforce for review comments (post_type = product).
+        if ( ! isset( $_POST['comment_post_ID'] ) ) return $commentdata;
+        $post_id = (int) $_POST['comment_post_ID'];
+        if ( get_post_type( $post_id ) !== 'product' ) return $commentdata;
+        $token = self::get_post_token();
+        $result = self::verify_token( $token );
+        if ( is_wp_error( $result ) ) {
+            wp_die( esc_html( $result->get_error_message() ), esc_html__( 'CAPTCHA Error', 'rybinsklab-security' ), [ 'response' => 403 ] );
+        }
+        return $commentdata;
     }
 }
