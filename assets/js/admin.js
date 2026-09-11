@@ -102,7 +102,12 @@ jQuery(function($) {
         })
         .done(function(res) {
             if (res && res.success) {
-                window.location.reload();
+                if (res.data && res.data.premium_activated && window.RLS_fireConfetti) {
+                    window.RLS_fireConfetti();
+                }
+                window.location.href = res.data && res.data.premium_activated
+                    ? '?premium_activated=1'
+                    : window.location.href;
                 return;
             }
             const msg = (res && res.data) ? res.data : 'Не удалось сохранить лицензию.';

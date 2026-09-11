@@ -197,6 +197,16 @@ class RLS_Admin_Pages {
             [ $this, 'render_wizard_page' ]
         );
 
+        // Premium page — CTA for free, showcase for premium.
+        add_submenu_page(
+            'rls-scanner',
+            'Premium',
+            'Premium',
+            'manage_options',
+            'rls-premium',
+            [ $this, 'render_premium_page' ]
+        );
+
         add_submenu_page(
             'rls-scanner',
             'Диагностика',
@@ -454,6 +464,23 @@ class RLS_Admin_Pages {
 
     public function render_wizard_page() {
         require_once RLS_PLUGIN_PATH . 'includes/admin/views/wizard.php';
+    }
+
+    /**
+     * Premium page — renders dedicated upsell or showcase view.
+     */
+    public function render_premium_page() {
+        $is_prem = function_exists( 'rls_is_premium_license_active' ) && rls_is_premium_license_active();
+        echo '<div class="wrap"><h1></h1>';
+        require_once RLS_PLUGIN_PATH . 'includes/admin/views/premium-page.php';
+        echo '</div>';
+    }
+
+    /**
+     * Helper: render the premium banner (CTA or showcase) for inclusion in other views.
+     */
+    public function render_premium_banner( $args = [] ) {
+        require_once RLS_PLUGIN_PATH . 'includes/admin/views/premium-banner.php';
     }
 
     public function maybe_redirect_after_activation() {
@@ -819,9 +846,14 @@ class RLS_Admin_Pages {
                 update_option( 'rls_global_blacklist', $ip_res['data']['ips'], false );
             }
 
+            // Was the previous state free? Then we just activated — flag for confetti.
+            $previous_status = get_option( 'rls_license_status', '' );
+            $was_free = empty( $previous_status ) || $previous_status === 'invalid';
+
             wp_send_json_success( [
                 'status' => 'valid',
                 'license_ui' => function_exists( 'rls_get_license_ui_state' ) ? rls_get_license_ui_state() : [],
+                'premium_activated' => $was_free,
             ] );
         }
 

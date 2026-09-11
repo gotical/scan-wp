@@ -714,3 +714,57 @@
         });
     });
 })(jQuery);
+
+/* =================================================================
+ * 11. PREMIUM CELEBRATION — confetti on activation
+ * ================================================================= */
+(function($) {
+    $(function() {
+        // Detect premium activation (URL has ?premium_activated=1).
+        if (window.location.search.indexOf('premium_activated') !== -1 && window.RLS_Toast) {
+            RLS_Toast.success('Добро пожаловать в Premium!', '🎉 Premium активирован');
+            setTimeout(function() { fireConfetti(); }, 300);
+        }
+        // Detect deactivation.
+        if (window.location.search.indexOf('premium_deactivated') !== -1 && window.RLS_Toast) {
+            RLS_Toast.info('Premium деактивирован. Плагин работает в Free-режиме.');
+        }
+
+        // Confetti for premium activation.
+        function fireConfetti() {
+            const container = document.createElement('div');
+            container.style.cssText = 'position:fixed; inset:0; pointer-events:none; z-index:9999999; overflow:hidden;';
+            document.body.appendChild(container);
+            const colors = ['#fde047', '#f59e0b', '#22d3ee', '#a78bfa', '#4ade80', '#f472b6'];
+            for (let i = 0; i < 80; i++) {
+                const piece = document.createElement('div');
+                piece.style.cssText = `
+                    position:absolute;
+                    top:-10px;
+                    left:${Math.random() * 100}%;
+                    width:${6 + Math.random() * 8}px;
+                    height:${10 + Math.random() * 12}px;
+                    background:${colors[Math.floor(Math.random() * colors.length)]};
+                    transform:rotate(${Math.random() * 360}deg);
+                    border-radius:${Math.random() > 0.5 ? '50%' : '2px'};
+                    opacity:0.95;
+                `;
+                container.appendChild(piece);
+                const duration = 1500 + Math.random() * 2000;
+                const startX = Math.random() * 100;
+                piece.animate([
+                    { transform: `translate(0, 0) rotate(0deg)`, opacity: 1 },
+                    { transform: `translate(${(Math.random() - 0.5) * 200}px, ${window.innerHeight + 100}px) rotate(${Math.random() * 720}deg)`, opacity: 0 }
+                ], { duration, easing: 'cubic-bezier(0.4, 0, 0.6, 1)' });
+                setTimeout(() => piece.remove(), duration);
+            }
+            setTimeout(() => container.remove(), 4000);
+        }
+        window.RLS_fireConfetti = fireConfetti;
+
+        // Premium page: click on feature to scroll to comparison table.
+        $(document).on('click', '.rls-premium-feature', function() {
+            $(this).toggleClass('is-expanded');
+        });
+    });
+})(jQuery);

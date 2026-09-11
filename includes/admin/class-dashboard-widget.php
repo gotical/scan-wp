@@ -47,6 +47,12 @@ class RLS_Dashboard_Widget {
         $score_color = $score >= 80 ? '#16a34a' : ( $score >= 50 ? '#d97706' : '#dc2626' );
         ?>
         <div class="rls-widget-container">
+            <?php
+            // Show premium CTA banner at the top of the dashboard widget for free users.
+            if ( ! ( function_exists( 'rls_is_premium_license_active' ) && rls_is_premium_license_active() ) ) {
+                require_once RLS_PLUGIN_PATH . 'includes/admin/views/premium-banner.php';
+            }
+            ?>
             <div class="rls-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                 <span style="color: <?php echo esc_attr( $status_color ); ?>; font-weight:600;">
                     <span class="dashicons dashicons-shield-alt"></span> <?php echo esc_html( $status_text ); ?>
