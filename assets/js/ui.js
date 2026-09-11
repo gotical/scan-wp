@@ -768,3 +768,193 @@
         });
     });
 })(jQuery);
+
+/* =================================================================
+ * 12. SCANNER v2.6.0 — real-time progress, diff, exports, FP report
+ * ================================================================= */
+(function($) {
+    $(function() {
+        // Real-time progress polling.
+        const progressBar = document.getElementById('rls-scan-progress-fill');
+        const progressStatTotal = document.getElementById('rls-scan-stat-total');
+        const progressStatScanned = document.getElementById('rls-scan-stat-scanned');
+        const progressStatThreats = document.getElementById('rls-scan-stat-threats');
+        const progressStatSkipped = document.getElementById('rls-scan-stat-skipped');
+        const progressCurrent = document.getElementById('rls-scan-current-file');
+        const progressEta = document.getElementById('rls-scan-eta');
+
+        if (progressBar) {
+            let pollInterval = null;
+            function pollProgress() {
+                $.post(rls_admin_data.ajax_url, {
+                    action: 'rls_get_scan_progress',
+                    nonce: rls_admin_data.settings_nonce
+                }).done((res) => {
+                    if ( ! res || ! res.success ) return;
+                    const p = res.data || {};
+                    const total = parseInt(p.total, 10) || 0;
+                    const scanned = parseInt(p.scanned, 10) || 0;
+                    const threats = parseInt(p.threats, 10) || 0;
+                    const skipped = parseInt(p.skipped, 10) || 0;
+                    const pct = total > 0 ? ( scanned / total * 100 ) : 0;
+                    progressBar.style.width = pct + '%';
+                    if (progressStatTotal) progressStatTotal.textContent = total;
+                    if (progressStatScanned) progressStatScanned.textContent = scanned;
+                    if (progressStatThreats) progressStatThreats.textContent = threats;
+                    if (progressStatSkipped) progressStatSkipped.textContent = skipped;
+                    if (progressCurrent && p.current) progressCurrent.textContent = '📄 ' + p.current;
+                    if (progressEta && p.eta_seconds) {
+                        const mm = Math.floor(p.eta_seconds / 60);
+                        const ss = p.eta_seconds % 60;
+                        progressEta.textContent = mm + ':' + String(ss).padStart(2, '0');
+                    }
+                    if (p.finished) {
+                        if (pollInterval) clearInterval(pollInterval);
+                        if (window.RLS_Toast) {
+                            RLS_Toast.success('Сканирование завершено', 'Сканер');
+                            setTimeout(() => location.reload(), 800);
+                        }
+                    }
+                });
+            }
+            pollProgress();
+            pollInterval = setInterval(pollProgress, 1500);
+        }
+
+        // DB scan + Checksums + Diff + Export.
+        $('#rls-run-db-scan').on('click', function() {
+            const btn = $(this).prop('disabled', true).text('Сканирование...');
+            $.post(rls_admin_data.ajax_url, {
+                action: 'rls_db_scan',
+                nonce: rls_admin_data.settings_nonce
+            }).done((res) => {
+                if (res && res.success) {
+                    if (window.RLS_Toast) RLS_Toast.info(res.data.message || 'DB scan done');
+                } else if (window.RLS_Toast) RLS_Toast.danger((res && res.data) || 'Error');
+                location.reload();
+            });
+        });
+        $('#rls-run-checksums-scan').on('click', function() {
+            const btn = $(this).prop('disabled', true).text('Проверка...');
+            $.post(rls_admin_data.ajax_url, {
+                action: 'rls_checksums_scan',
+                nonce: rls_admin_data.settings_nonce
+            }).done((res) => {
+                if (res && res.success) {
+                    if (window.RLS_Toast) RLS_Toast.info(res.data.message || 'Checksums done');
+                } else if (window.RLS_Toast) RLS_Toast.danger((res && res.data) || 'Error');
+                location.reload();
+            });
+        });
+        $('#rls-auto-quarantine').on('click', function() {
+            if (window.RLS_Confirm) {
+                RLS_Confirm.show({
+                    title: 'Авто-карантин critical угроз',
+                    message: 'Все файлы с risk_score ≥ 90 будут перемещены в карантин с backup. Продолжить?',
+                    type: 'danger',
+                    confirmText: 'Карантин',
+                }).then((ok) => {
+                    if (ok) {
+                        $.post(rls_admin_data.ajax_url, {
+                            action: 'rls_auto_quarantine_critical',
+                            nonce: rls_admin_data.settings_nonce
+                        }).done((res) => {
+                            if (window.RLS_Toast) {
+                                if (res && res.success) RLS_Toast.success(res.data.message);
+                                else RLS_Toast.danger((res && res.data) || 'Error');
+                            }
+                            location.reload();
+                        });
+                    }
+                });
+            }
+        });
+
+        // Diff between scans.
+        $('#rls-run-diff').on('click', function() {
+            const a = $('#rls-diff-scan-a').val();
+            const b = $('#rls-diff-scan-b').val();
+            if ( ! a || ! b ) { alert('Выберите оба скана для сравнения'); return; }
+            $.post(rls_admin_data.ajax_url, {
+                action: 'rls_diff_scans',
+                nonce: rls_admin_data.settings_nonce,
+                scan_a: a,
+                scan_b: b
+            }).done((res) => {
+                if (res && res.success) {
+                    renderDiff(res.data);
+                } else if (window.RLS_Toast) RLS_Toast.danger((res && res.data) || 'Error');
+            });
+        });
+        function renderDiff(d) {
+            const root = $('#rls-diff-result');
+            if ( ! root.length ) return;
+            const renderList = (arr) => arr.map(p => '<li>' + escapeHtml(p) + '</li>').join('') || '<li style="color:var(--rls-text-subtle);">Нет</li>';
+            root.html(
+                '<div class="rls-diff-grid">' +
+                    '<div class="rls-diff-col is-new"><h4>🆕 Новые (' + d.new.length + ')</h4><ul class="rls-diff-list">' + renderList(d.new) + '</ul></div>' +
+                    '<div class="rls-diff-col is-fixed"><h4>✓ Исправленные (' + d.fixed.length + ')</h4><ul class="rls-diff-list">' + renderList(d.fixed) + '</ul></div>' +
+                    '<div class="rls-diff-col is-persistent"><h4>⚠ Остались (' + d.persistent.length + ')</h4><ul class="rls-diff-list">' + renderList(d.persistent) + '</ul></div>' +
+                '</div>'
+            );
+            root.show();
+        }
+
+        // False Positive report.
+        $(document).on('click', '.rls-report-fp', function(e) {
+            e.preventDefault();
+            const file = $(this).data('file');
+            const rule = $(this).data('rule') || '';
+            $.post(rls_admin_data.ajax_url, {
+                action: 'rls_report_false_positive',
+                nonce: rls_admin_data.settings_nonce,
+                file,
+                rule
+            }).done((res) => {
+                if (window.RLS_Toast) {
+                    if (res && res.success) RLS_Toast.success('Добавлено в whitelist');
+                    else RLS_Toast.danger((res && res.data) || 'Error');
+                }
+            });
+        });
+
+        // Threat details modal.
+        $(document).on('click', '.rls-threat-row', function() {
+            const file = $(this).data('file');
+            const line = $(this).data('line') || 0;
+            const snippet = $(this).data('snippet') || '';
+            const rule = $(this).data('rule') || '';
+            const tags = ($(this).data('tags') || '').split(',').filter(Boolean);
+            const risk = $(this).data('risk') || 0;
+
+            const modal = $('#rls-threat-modal');
+            if ( ! modal.length ) return;
+            modal.find('.rls-modal-title').text('Детали угрозы');
+            let body = '<div class="rls-threat-detail">';
+            body += '<p><strong>Файл:</strong> <code>' + escapeHtml(file) + '</code></p>';
+            body += '<p><strong>Строка:</strong> ' + line + '</p>';
+            body += '<p><strong>Правило:</strong> ' + escapeHtml(rule) + '</p>';
+            body += '<p><strong>Risk Score:</strong> <span class="rls-risk-badge rls-risk-' + (risk >= 90 ? 'critical' : risk >= 70 ? 'high' : risk >= 40 ? 'medium' : 'low') + '">' + risk + '</span></p>';
+            if (tags.length) {
+                body += '<div class="rls-threat-tags">' + tags.map(t => '<span class="rls-threat-tag">' + escapeHtml(t) + '</span>').join('') + '</div>';
+            }
+            if (snippet) {
+                body += '<pre class="rls-threat-snippet">' + escapeHtml(snippet) + '</pre>';
+            }
+            body += '<div style="display:flex; gap:8px; margin-top:14px;">';
+            body += '<button class="button button-link-delete rls-report-fp" data-file="' + escapeHtml(file) + '" data-rule="' + escapeHtml(rule) + '">Это не угроза</button>';
+            body += '<a class="button" href="?page=rls-scanner&action=quarantine&file=' + encodeURIComponent(file) + '" style="margin-left:auto;">В карантин →</a>';
+            body += '</div>';
+            body += '</div>';
+            modal.find('.rls-modal-body').html(body);
+            modal.css('display', 'flex');
+        });
+        $(document).on('click', '#rls-threat-modal-close', () => $('#rls-threat-modal').hide());
+        $(document).on('click', '#rls-threat-modal', (e) => { if (e.target.id === 'rls-threat-modal') $('#rls-threat-modal').hide(); });
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+    });
+})(jQuery);

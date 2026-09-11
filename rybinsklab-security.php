@@ -3,7 +3,7 @@
  * Plugin Name:       Rybinsk Lab Security
  * Plugin URI:        https://rybinsklab.ru/scan-wp/
  * Description:       Комплексная защита WordPress: WAF, глобальный черный список IP, сканер, защита входа и журнал атак.
- * Version:           2.5.0
+ * Version:           2.7.0
  * Author:            Усачёв Денис
  * Author URI:        https://rybinsklab.ru/
  * License:           GPL v2 or later
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
  */
-define( 'RLS_VERSION', '2.5.0' );
+define( 'RLS_VERSION', '2.7.0' );
 define( 'RLS_API_URL', 'https://rybinsklab.ru/scan-wp/api/index.php' );
 define( 'RLS_PLUGIN_FILE', __FILE__ );
 define( 'RLS_PLUGIN_PATH', plugin_dir_path( __FILE__ ) );
@@ -280,6 +280,7 @@ if ( ! function_exists( 'rls_get_protection_mode_ui_state' ) ) {
 require_once RLS_PLUGIN_PATH . 'includes/class-firewall.php';
 require_once RLS_PLUGIN_PATH . 'includes/class-login-security.php';
 require_once RLS_PLUGIN_PATH . 'includes/class-hardening.php';
+require_once RLS_PLUGIN_PATH . 'includes/class-captcha.php';
 require_once RLS_PLUGIN_PATH . 'includes/class-2fa.php';
 require_once RLS_PLUGIN_PATH . 'includes/class-notifications.php';
 require_once RLS_PLUGIN_PATH . 'includes/class-antispam.php';
@@ -291,6 +292,7 @@ require_once RLS_PLUGIN_PATH . 'includes/class-cache-compat.php';
 require_once RLS_PLUGIN_PATH . 'includes/class-health.php';
 require_once RLS_PLUGIN_PATH . 'includes/class-multisite.php';
 require_once RLS_PLUGIN_PATH . 'includes/class-mode-manager.php';
+require_once RLS_PLUGIN_PATH . 'includes/class-webhooks.php';
 
 // Core infrastructure
 require_once RLS_PLUGIN_PATH . 'includes/class-api-client.php';
@@ -303,6 +305,10 @@ require_once plugin_dir_path( __FILE__ ) . 'includes/class-rls-quarantine.php';
 
 // Scanner & admin
 require_once RLS_PLUGIN_PATH . 'includes/scanner/class-scan-history.php';
+require_once RLS_PLUGIN_PATH . 'includes/scanner/class-scanner-cache.php';
+require_once RLS_PLUGIN_PATH . 'includes/scanner/class-scanner-heuristics.php';
+require_once RLS_PLUGIN_PATH . 'includes/scanner/class-scanner-database.php';
+require_once RLS_PLUGIN_PATH . 'includes/scanner/class-scanner-checksums.php';
 require_once RLS_PLUGIN_PATH . 'includes/scanner/class-scanner-engine.php';
 require_once RLS_PLUGIN_PATH . 'includes/admin/class-admin-pages.php';
 require_once RLS_PLUGIN_PATH . 'includes/admin/class-dashboard-widget.php';
@@ -333,6 +339,9 @@ function rls_run_plugin(): void {
     // Hardening module (htaccess, headers, version, REST, methods)
     ( new RLS_Hardening() )->init();
 
+    // CAPTCHA module (Google reCAPTCHA / Yandex SmartCaptcha)
+    ( new RLS_Captcha() )->init();
+
     // Login protection (brute force, honeypot, captcha)
     ( new RLS_Login_Security() )->init();
 
@@ -362,6 +371,9 @@ function rls_run_plugin(): void {
 
     // Health check & diagnostics
     ( new RLS_Health() )->init();
+
+    // Webhooks (Slack/Discord/Telegram)
+    ( new RLS_Webhooks() )->init();
 
     // Cron / scheduled tasks
     ( new RLS_Cron() )->init();

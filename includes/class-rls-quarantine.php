@@ -133,6 +133,10 @@ class RLS_Quarantine {
         $new_filename = $hash . '.suspected';
         $destination  = wp_normalize_path( $this->quarantine_dir . '/' . $new_filename );
 
+        // Create .bak of the original file BEFORE moving (recovery safety).
+        $backup_path = $this->create_backup( $filepath );
+        $backup_ok = ! empty( $backup_path );
+
         if ( @rename( $filepath, $destination ) ) {
             $index = $this->get_quarantined_files();
             $index[ $hash ] = [
@@ -140,12 +144,40 @@ class RLS_Quarantine {
                 'filename'       => $filename,
                 'quarantined_at' => current_time( 'mysql' ),
                 'stored_file'    => $new_filename,
+                'backup_path'    => $backup_path,
+                'backup_ok'      => $backup_ok,
             ];
             $this->save_index( $index );
-            wp_send_json_success( [ 'message' => 'Файл перемещен в карантин.' ] );
+
+            // Remove from scanner cache.
+            if ( class_exists( 'RLS_Scanner_Cache' ) ) {
+                RLS_Scanner_Cache::forget( $filepath );
+            }
+
+            wp_send_json_success( [
+                'message'   => 'Файл перемещен в карантин.',
+                'backup_ok' => $backup_ok,
+            ] );
         } else {
             wp_send_json_error( 'Не удалось переместить файл (ошибка прав).' );
         }
+    }
+
+    /**
+     * Create a backup of the file in a safe location before quarantine.
+     */
+    private function create_backup( $filepath ) {
+        $backup_dir = wp_normalize_path( $this->quarantine_dir . '/backups' );
+        if ( ! file_exists( $backup_dir ) ) {
+            wp_mkdir_p( $backup_dir );
+            @file_put_contents( $backup_dir . '/index.php', '<?php // Silence' );
+        }
+        $hash = md5( $filepath . time() );
+        $backup_path = wp_normalize_path( $backup_dir . '/' . $hash . '.bak' );
+        if ( @copy( $filepath, $backup_path ) ) {
+            return $backup_path;
+        }
+        return '';
     }
 
     public function ajax_restore_file() {

@@ -73,6 +73,8 @@ class RLS_Admin_Pages {
         add_action( 'wp_ajax_rls_preview_protection_mode', [ $this, 'ajax_preview_protection_mode' ] );
         add_action( 'wp_ajax_rls_activate_emergency_mode', [ $this, 'ajax_activate_emergency_mode' ] );
         add_action( 'wp_ajax_rls_deactivate_emergency_mode', [ $this, 'ajax_deactivate_emergency_mode' ] );
+        // CAPTCHA.
+        add_action( 'wp_ajax_rls_captcha_test', [ 'RLS_Captcha', 'ajax_test' ] );
     }
     
     /**
@@ -195,6 +197,15 @@ class RLS_Admin_Pages {
             'manage_options',
             'rls-wizard',
             [ $this, 'render_wizard_page' ]
+        );
+
+        add_submenu_page(
+            'rls-scanner',
+            'CAPTCHA',
+            'CAPTCHA',
+            'manage_options',
+            'rls-captcha',
+            [ $this, 'render_captcha_page' ]
         );
 
         // Premium page — CTA for free, showcase for premium.
@@ -464,6 +475,15 @@ class RLS_Admin_Pages {
 
     public function render_wizard_page() {
         require_once RLS_PLUGIN_PATH . 'includes/admin/views/wizard.php';
+    }
+
+    public function render_captcha_page() {
+        if ( ! current_user_can( 'manage_options' ) ) wp_die( 'Access denied' );
+        if ( isset( $_POST['rls_captcha_settings'] ) && check_admin_referer( 'rls_captcha_group' ) ) {
+            RLS_Captcha::update_settings( $_POST['rls_captcha_settings'] );
+            echo '<div class="rls-notice is-success" style="margin:14px 0;">CAPTCHA настройки сохранены.</div>';
+        }
+        require_once RLS_PLUGIN_PATH . 'includes/admin/views/captcha-page.php';
     }
 
     /**

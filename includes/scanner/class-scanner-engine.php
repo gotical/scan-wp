@@ -50,6 +50,20 @@ class RLS_Scanner_Engine {
         add_action( 'wp_ajax_rls_compare_snapshot_step', [ $this, 'ajax_compare_snapshot_step' ] );
         add_action( 'wp_ajax_rls_finalize_comparison', [ $this, 'ajax_finalize_comparison' ] );
         add_action( 'wp_ajax_rls_neutralize_file', [ $this, 'ajax_neutralize_file' ] );
+        // v2.6.0 endpoints.
+        add_action( 'wp_ajax_rls_get_scan_progress', [ $this, 'ajax_get_scan_progress' ] );
+        add_action( 'wp_ajax_rls_export_scan', [ $this, 'ajax_export_scan' ] );
+        add_action( 'wp_ajax_rls_db_scan', [ $this, 'ajax_db_scan' ] );
+        add_action( 'wp_ajax_rls_checksums_scan', [ $this, 'ajax_checksums_scan' ] );
+        add_action( 'wp_ajax_rls_diff_scans', [ $this, 'ajax_diff_scans' ] );
+        add_action( 'wp_ajax_rls_report_false_positive', [ $this, 'ajax_report_false_positive' ] );
+        add_action( 'wp_ajax_rls_auto_quarantine_critical', [ $this, 'ajax_auto_quarantine_critical' ] );
+
+        // WP-CLI integration.
+        if ( defined( 'WP_CLI' ) && WP_CLI ) {
+            WP_CLI::add_command( 'rls scan', [ $this, 'cli_scan' ] );
+            WP_CLI::add_command( 'rls status', [ $this, 'cli_status' ] );
+        }
     }
 
     private function get_scan_mode_context() {
@@ -492,15 +506,370 @@ class RLS_Scanner_Engine {
         return $files_to_scan;
     }
 
-    public function scan_files_direct( $file_list ) {
+    public function scan_files_direct( $file_list, $options = [] ) {
         $threats = [];
+        $incremental = ! empty( $options['incremental'] );
+        $with_heuristics = ! empty( $options['heuristics'] );
+
+        if ( class_exists( 'RLS_Scanner_Cache' ) ) {
+            RLS_Scanner_Cache::reset_progress( count( $file_list ) );
+        }
+
         foreach ( $file_list as $file_path ) {
             if ( ! file_exists( $file_path ) ) continue;
-            $result = $this->scan_single_file( $file_path );
+
+            // Incremental: skip unchanged files.
+            if ( $incremental && class_exists( 'RLS_Scanner_Cache' ) && RLS_Scanner_Cache::is_unchanged( $file_path ) ) {
+                RLS_Scanner_Cache::increment_skipped();
+                continue;
+            }
+
+            if ( class_exists( 'RLS_Scanner_Cache' ) ) {
+                RLS_Scanner_Cache::increment_scanned( $file_path );
+            }
+
+            $result = $this->scan_single_file_enhanced( $file_path, $with_heuristics );
             if ( ! empty( $result ) ) {
                 $threats = array_merge( $threats, $result );
+                if ( class_exists( 'RLS_Scanner_Cache' ) ) {
+                    RLS_Scanner_Cache::increment_threats( count( $result ) );
+                }
             }
+
+            // Cache this file's state.
+            if ( class_exists( 'RLS_Scanner_Cache' ) ) {
+                $risk = 0;
+                foreach ( $result as $r ) {
+                    $risk = max( $risk, (int) ( $r['risk_score'] ?? 0 ) );
+                }
+                RLS_Scanner_Cache::put( $file_path, count( $result ), $risk );
+            }
+        }
+
+        if ( class_exists( 'RLS_Scanner_Cache' ) ) {
+            RLS_Scanner_Cache::finish_progress();
         }
         return $threats;
     }
+
+    /**
+     * Enhanced single-file scanner with heuristics + risk score.
+     * Public wrapper that uses heuristics by default.
+     */
+    public function scan_single_file_enhanced( $file_path, $with_heuristics = true ) {
+        if ( ! file_exists( $file_path ) || ! is_readable( $file_path ) ) return [];
+        $content = @file_get_contents( $file_path );
+        if ( $content === false ) return [];
+        // Skip very large files (>5MB) to avoid memory issues.
+        if ( strlen( $content ) > 5 * 1024 * 1024 ) return [];
+
+        $findings = [];
+
+        // 1. Substring signatures (legacy).
+        $signatures = $this->get_signatures();
+        foreach ( $signatures as $sig ) {
+            if ( strpos( $content, $sig ) !== false ) {
+                $findings[] = [
+                    'file'        => $file_path,
+                    'signature'   => $sig,
+                    'detector'    => 'signature',
+                    'severity'    => 80,
+                    'tags'        => [ 'signature' ],
+                    'risk_score'  => 80,
+                    'line'        => self::find_line_for_substring( $content, $sig ),
+                ];
+            }
+        }
+
+        // 2. Heuristic regex rules + entropy detection.
+        if ( $with_heuristics && class_exists( 'RLS_Scanner_Heuristics' ) ) {
+            $heuristic_findings = RLS_Scanner_Heuristics::scan_content( $content, $file_path );
+            foreach ( $heuristic_findings as $hf ) {
+                $findings[] = array_merge( [
+                    'file'       => $file_path,
+                    'detector'   => 'heuristic',
+                    'risk_score' => (int) $hf['severity'],
+                ], $hf );
+            }
+            $obf_findings = RLS_Scanner_Heuristics::detect_obfuscation( $content );
+            foreach ( $obf_findings as $of ) {
+                $findings[] = array_merge( [
+                    'file'       => $file_path,
+                    'detector'   => 'heuristic',
+                    'risk_score' => (int) $of['severity'],
+                ], $of );
+            }
+        }
+
+        // 3. Aggregate risk score.
+        $aggregated_findings = [];
+        if ( ! empty( $findings ) ) {
+            $by_file = [];
+            foreach ( $findings as $f ) {
+                $key = ( $f['file'] ?? $file_path ) . ':' . ( $f['line'] ?? 0 );
+                if ( ! isset( $by_file[ $key ] ) ) {
+                    $by_file[ $key ] = [];
+                }
+                $by_file[ $key ][] = $f;
+            }
+            foreach ( $by_file as $key => $group ) {
+                $risk = class_exists( 'RLS_Scanner_Heuristics' )
+                    ? RLS_Scanner_Heuristics::aggregate_risk_score( $group )
+                    : max( array_column( $group, 'risk_score' ) ?: [ 0 ] );
+                $primary = $group[0];
+                $aggregated_findings[] = array_merge( $primary, [
+                    'risk_score'   => $risk,
+                    'all_findings' => $group,
+                    'count'        => count( $group ),
+                ] );
+            }
+        }
+        return $aggregated_findings;
+    }
+
+    private static function find_line_for_substring( $content, $needle ) {
+        $offset = strpos( $content, $needle );
+        if ( $offset === false ) return 0;
+        return substr_count( substr( $content, 0, $offset ), "\n" ) + 1;
+    }
+
+    /**
+     * Returns a list of files for full / incremental scan.
+     */
+    public function get_all_critical_files() {
+        $files = $this->get_critical_files_list();
+        // Include wp-config.php and uploads/*.php specifically.
+        $wp_config = ABSPATH . 'wp-config.php';
+        if ( file_exists( $wp_config ) ) $files[] = $wp_config;
+        return array_values( array_unique( $files ) );
+    }
+
+    /**
+     * Quick incremental scan: only files changed since last full scan.
+     */
+    public function scan_incremental( $file_list ) {
+        return $this->scan_files_direct( $file_list, [ 'incremental' => true, 'heuristics' => true ] );
+    }
+
+    /**
+     * Full scan with all detections.
+     */
+    public function scan_full( $file_list ) {
+        // Reset cache for full scan to ensure fresh data.
+        return $this->scan_files_direct( $file_list, [ 'incremental' => false, 'heuristics' => true ] );
+    }
+
+    /* =====================================================================
+     * v2.6.0 NEW AJAX ENDPOINTS + WP-CLI
+     * ===================================================================== */
+
+    public function ajax_get_scan_progress() {
+        check_ajax_referer( 'rls_settings_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error();
+        if ( ! class_exists( 'RLS_Scanner_Cache' ) ) wp_send_json_error();
+        $progress = RLS_Scanner_Cache::get_progress();
+        $eta = '';
+        if ( ! empty( $progress['started_at'] ) && ! empty( $progress['scanned'] ) && $progress['scanned'] > 0 ) {
+            $elapsed = time() - (int) $progress['started_at'];
+            $per_file = $elapsed / max( 1, (int) $progress['scanned'] );
+            $remaining = max( 0, (int) $progress['total'] - (int) $progress['scanned'] );
+            $eta = (int) ( $per_file * $remaining );
+        }
+        wp_send_json_success( array_merge( $progress, [ 'eta_seconds' => $eta ] ) );
+    }
+
+    public function ajax_export_scan() {
+        check_ajax_referer( 'rls_settings_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) wp_die( 'Access denied' );
+        $format = sanitize_key( $_GET['format'] ?? 'json' );
+        $scan_id = (int) ( $_GET['scan_id'] ?? 0 );
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'rls_scan_history';
+        $row = $scan_id
+            ? $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table WHERE id = %d", $scan_id ), ARRAY_A )
+            : $wpdb->get_row( "SELECT * FROM $table ORDER BY id DESC LIMIT 1", ARRAY_A );
+
+        if ( ! $row ) wp_die( 'No scan found' );
+        $threats = json_decode( $row['scan_details'], true );
+        if ( ! is_array( $threats ) ) $threats = [];
+
+        $filename = 'rls-scan-' . gmdate( 'Ymd-His' ) . ( $scan_id ? '-' . $scan_id : '' );
+        if ( $format === 'csv' ) {
+            nocache_headers();
+            header( 'Content-Type: text/csv; charset=utf-8' );
+            header( 'Content-Disposition: attachment; filename="' . $filename . '.csv"' );
+            echo "file,risk_score,rule,line,severity,type\n";
+            foreach ( $threats as $t ) {
+                $file = isset( $t['file'] ) ? str_replace( [ "\n", '"' ], [ ' ', '""' ], $t['file'] ) : '';
+                $rule = isset( $t['rule_name'] ) ? str_replace( [ "\n", '"' ], [ ' ', '""' ], $t['rule_name'] ) : '';
+                echo '"' . $file . '",' . (int) ( $t['risk_score'] ?? 0 ) . ',"' . $rule . '",' . (int) ( $t['line'] ?? 0 ) . ',' . (int) ( $t['severity'] ?? 0 ) . ',' . sanitize_key( $t['detector'] ?? 'signature' ) . "\n";
+            }
+            exit;
+        }
+        // JSON default.
+        nocache_headers();
+        header( 'Content-Type: application/json; charset=utf-8' );
+        header( 'Content-Disposition: attachment; filename="' . $filename . '.json"' );
+        echo wp_json_encode( [
+            'scan'     => $row,
+            'threats'  => $threats,
+            'exported' => gmdate( 'c' ),
+            'site'     => home_url(),
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE );
+        exit;
+    }
+
+    public function ajax_db_scan() {
+        check_ajax_referer( 'rls_settings_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error();
+        if ( ! class_exists( 'RLS_Scanner_Database' ) ) wp_send_json_error( 'DB scanner not available' );
+        $findings = RLS_Scanner_Database::scan();
+        wp_send_json_success( [
+            'findings' => $findings,
+            'count'    => count( $findings ),
+            'message'  => sprintf( 'DB scan: %d подозрительных записей', count( $findings ) ),
+        ] );
+    }
+
+    public function ajax_checksums_scan() {
+        check_ajax_referer( 'rls_settings_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error();
+        if ( ! class_exists( 'RLS_Scanner_Checksums' ) ) wp_send_json_error( 'Checksums scanner not available' );
+        $findings = RLS_Scanner_Checksums::scan();
+        wp_send_json_success( [
+            'findings' => $findings,
+            'count'    => count( $findings ),
+            'message'  => sprintf( 'WP.org checksums: %d модифицированных файлов', count( $findings ) ),
+        ] );
+    }
+
+    public function ajax_diff_scans() {
+        check_ajax_referer( 'rls_settings_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error();
+        global $wpdb;
+        $table = $wpdb->prefix . 'rls_scan_history';
+        $a_id = (int) ( $_POST['scan_a'] ?? 0 );
+        $b_id = (int) ( $_POST['scan_b'] ?? 0 );
+        if ( ! $a_id || ! $b_id ) wp_send_json_error( 'Не указаны ID сканов' );
+        $a = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table WHERE id = %d", $a_id ), ARRAY_A );
+        $b = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table WHERE id = %d", $b_id ), ARRAY_A );
+        if ( ! $a || ! $b ) wp_send_json_error( 'Сканы не найдены' );
+        $a_threats = (array) json_decode( $a['scan_details'] ?? '[]', true );
+        $b_threats = (array) json_decode( $b['scan_details'] ?? '[]', true );
+        $a_files = array_unique( array_column( $a_threats, 'file' ) );
+        $b_files = array_unique( array_column( $b_threats, 'file' ) );
+        $new_threats = array_values( array_diff( $b_files, $a_files ) );
+        $fixed_threats = array_values( array_diff( $a_files, $b_files ) );
+        $persistent_threats = array_values( array_intersect( $a_files, $b_files ) );
+        wp_send_json_success( [
+            'scan_a' => $a_id,
+            'scan_b' => $b_id,
+            'new'       => $new_threats,
+            'fixed'     => $fixed_threats,
+            'persistent'=> $persistent_threats,
+        ] );
+    }
+
+    public function ajax_report_false_positive() {
+        check_ajax_referer( 'rls_settings_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error();
+        $file = sanitize_text_field( wp_unslash( $_POST['file'] ?? '' ) );
+        $rule = sanitize_text_field( wp_unslash( $_POST['rule'] ?? '' ) );
+        if ( ! $file || ! $rule ) wp_send_json_error( 'Не указаны file/rule' );
+        $stats = get_option( 'rls_stats', [] );
+        $stats['false_positives'] = ( $stats['false_positives'] ?? 0 ) + 1;
+        update_option( 'rls_stats', $stats );
+
+        // Add to whitelist with comment.
+        $whitelist = get_option( 'rls_whitelist', [] );
+        $norm = wp_normalize_path( $file );
+        $whitelist[ $norm ] = [
+            'hash'         => (string) md5_file( $file ),
+            'mtime'        => (int) filemtime( $file ),
+            'reason'       => 'False positive report',
+            'rule'         => $rule,
+            'reported_at'  => time(),
+        ];
+        update_option( 'rls_whitelist', $whitelist );
+        wp_send_json_success( 'Добавлено в whitelist' );
+    }
+
+    public function ajax_auto_quarantine_critical() {
+        check_ajax_referer( 'rls_settings_nonce', 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error();
+        $threshold = 90; // Only critical threats.
+        $count = 0;
+        $quarantined = [];
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'rls_scan_history';
+        $latest = $wpdb->get_row( "SELECT scan_details FROM $table ORDER BY id DESC LIMIT 1", ARRAY_A );
+        if ( ! $latest ) wp_send_json_error( 'Нет данных о последнем сканировании' );
+        $threats = (array) json_decode( $latest['scan_details'] ?? '[]', true );
+        foreach ( $threats as $t ) {
+            if ( (int) ( $t['risk_score'] ?? 0 ) < $threshold ) continue;
+            $file = $t['file'] ?? '';
+            if ( ! $file || ! file_exists( $file ) ) continue;
+            $quarantine = new RLS_Quarantine();
+            if ( method_exists( $quarantine, 'is_safe_quarantine_path' ) && $quarantine->is_safe_quarantine_path( $file ) ) {
+                // Move via reflection-friendly path (file ops directly).
+                $quarantine_dir = wp_normalize_path( wp_upload_dir()['basedir'] . '/rls-quarantine' );
+                if ( ! file_exists( $quarantine_dir ) ) continue;
+                $hash = md5( $file . microtime( true ) );
+                $new_file = $quarantine_dir . '/' . $hash . '.suspected';
+                if ( @rename( $file, $new_file ) ) {
+                    $index_path = $quarantine_dir . '/index_map.json';
+                    $index = file_exists( $index_path ) ? json_decode( file_get_contents( $index_path ), true ) : [];
+                    if ( ! is_array( $index ) ) $index = [];
+                    $index[ $hash ] = [
+                        'original_path' => $file,
+                        'quarantined_at' => current_time( 'mysql' ),
+                        'auto' => true,
+                        'threat' => $t,
+                    ];
+                    @file_put_contents( $index_path, wp_json_encode( $index ) );
+                    $count++;
+                    $quarantined[] = $file;
+                }
+            }
+        }
+        wp_send_json_success( [
+            'message' => sprintf( 'Auto-quarantined: %d файлов', $count ),
+            'files'   => $quarantined,
+        ] );
+    }
+
+    /* === WP-CLI === */
+    public function cli_scan( $args, $assoc_args ) {
+        $mode = $assoc_args['mode'] ?? 'full';
+        $files = $this->get_all_critical_files();
+        WP_CLI::log( sprintf( 'Starting scan in %s mode (%d files)', $mode, count( $files ) ) );
+        $threats = ( $mode === 'incremental' )
+            ? $this->scan_incremental( $files )
+            : $this->scan_full( $files );
+        if ( class_exists( 'RLS_Scan_History' ) ) {
+            RLS_Scan_History::add_entry( 'cli-' . $mode, $threats, 0 );
+        }
+        WP_CLI::log( sprintf( 'Found %d threats', count( $threats ) ) );
+        if ( ! empty( $threats ) ) {
+            WP_CLI\Utils\format_items( 'table', $threats, [ 'file', 'risk_score', 'rule_name', 'line' ] );
+        } else {
+            WP_CLI::success( 'Site is clean!' );
+        }
+    }
+
+    public function cli_status() {
+        $stats = get_option( 'rls_stats', [] );
+        $cache = class_exists( 'RLS_Scanner_Cache' ) ? RLS_Scanner_Cache::get_progress() : [];
+        WP_CLI::log( 'Rybinsk Lab Security Status' );
+        WP_CLI::log( sprintf( 'Firewall blocked: %d', $stats['firewall_blocked'] ?? 0 ) );
+        WP_CLI::log( sprintf( 'Login attempts blocked: %d', $stats['login_attempts_blocked'] ?? 0 ) );
+        WP_CLI::log( sprintf( 'Viruses found: %d', $stats['viruses_found'] ?? 0 ) );
+        WP_CLI::log( sprintf( 'False positives: %d', $stats['false_positives'] ?? 0 ) );
+        if ( ! empty( $cache['active'] ) ) {
+            WP_CLI::log( sprintf( 'Scan in progress: %d/%d', $cache['scanned'] ?? 0, $cache['total'] ?? 0 ) );
+        }
+    }
+
 }

@@ -144,9 +144,54 @@ if(class_exists('RLS_Quarantine')) {
                     <?php endif; ?>
                 </div>
 
-                <!-- ВКЛАДКА 4: ИСТОРИЯ -->
+                <!-- ВКЛАДКА 4: ИСТОРИЯ + DIFF -->
                 <div id="scan-history" class="rls-tab-panel">
                     <p class="description">Журнал последних 20 проверок системы (Ручные и Автоматические).</p>
+
+                    <!-- Diff between scans -->
+                    <div class="rls-diff-controls">
+                        <select id="rls-diff-scan-a" class="regular-text" style="max-width:280px;">
+                            <option value="">— Скан A —</option>
+                            <?php foreach ( $scan_history as $entry ) : ?>
+                                <option value="<?php echo (int) $entry['id']; ?>">
+                                    #<?php echo (int) $entry['id']; ?> — <?php echo esc_html( date_i18n( 'd.m.Y H:i', strtotime( $entry['scan_date'] ) ) ); ?>
+                                    (<?php echo (int) $entry['threats_count']; ?> угроз)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <select id="rls-diff-scan-b" class="regular-text" style="max-width:280px;">
+                            <option value="">— Скан B —</option>
+                            <?php foreach ( $scan_history as $entry ) : ?>
+                                <option value="<?php echo (int) $entry['id']; ?>">
+                                    #<?php echo (int) $entry['id']; ?> — <?php echo esc_html( date_i18n( 'd.m.Y H:i', strtotime( $entry['scan_date'] ) ) ); ?>
+                                    (<?php echo (int) $entry['threats_count']; ?> угроз)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <button type="button" class="button" id="rls-run-diff">Сравнить</button>
+                    </div>
+                    <div id="rls-diff-result" style="display:none;"></div>
+
+                    <!-- Export buttons -->
+                    <div style="margin-top:14px; display:flex; gap:8px; flex-wrap:wrap;">
+                        <?php if ( ! empty( $scan_history ) ) :
+                            $latest_id = (int) $scan_history[0]['id'];
+                            ?>
+                            <a class="button button-secondary" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-ajax.php?action=rls_export_scan&format=json&scan_id=' . $latest_id ), 'rls_settings_nonce', 'nonce' ) ); ?>" target="_blank">
+                                📥 Экспорт последнего скана (JSON)
+                            </a>
+                            <a class="button button-secondary" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-ajax.php?action=rls_export_scan&format=csv&scan_id=' . $latest_id ), 'rls_settings_nonce', 'nonce' ) ); ?>" target="_blank">
+                                📊 Экспорт (CSV)
+                            </a>
+                        <?php endif; ?>
+                        <button type="button" class="button button-secondary" id="rls-run-db-scan">🗄 Сканировать БД</button>
+                        <button type="button" class="button button-secondary" id="rls-run-checksums-scan">🔍 Проверить WP.org checksums</button>
+                        <?php if ( ! empty( $scan_history[0]['scan_details'] ) ) : ?>
+                            <button type="button" class="button button-primary" id="rls-auto-quarantine" style="margin-left:auto;">🚨 Auto-quarantine critical</button>
+                        <?php endif; ?>
+                    </div>
+
+                    <hr style="margin: 18px 0;">
 
                     <?php if ( empty( $scan_history ) ) : ?>
                         <div class="rls-empty-state">
@@ -209,17 +254,52 @@ if(class_exists('RLS_Quarantine')) {
                     <?php endif; ?>
                 </div>
 
-                <!-- ОБЛАСТЬ ПРОГРЕССА (СКРЫТА ПО УМОЛЧАНИЮ) -->
-                <div class="rls-scan-progress-area" style="display:none; margin-top:20px; padding:15px; background:#f9f9f9; border:1px solid #ddd; border-radius:5px;">
-                    <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                <!-- ОБЛАСТЬ ПРОГРЕССА + REAL-TIME -->
+                <div class="rls-scan-progress-area" style="display:none; margin-top:20px; padding:18px; background:#f9f9f9; border:1px solid #ddd; border-radius:5px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                         <div style="display:flex; align-items:center; gap:10px;">
                             <span class="spinner is-active" style="float:none; margin:0;"></span>
-                            <strong id="rls-scan-status-title">Выполняется операция...</strong>
+                            <strong id="rls-scan-status-title">Выполняется сканирование…</strong>
                         </div>
-                        <div id="rls-scan-status">0 / 0</div>
+                        <div>
+                            <span style="font-size:12px; color:#666;">ETA:</span>
+                            <strong id="rls-scan-eta">--:--</strong>
+                        </div>
                     </div>
-                    <div id="rls-scan-progress-container" style="background-color:#e0e0e0; border-radius:10px; overflow:hidden; height: 20px; width: 100%;">
-                        <div id="rls-scan-progress-bar" style="width:0; height:100%; background-color:#2271b1; text-align:center; line-height:20px; color:#fff; font-size: 11px; transition:width 0.2s ease;"></div>
+                    <div class="rls-scan-progress-bar">
+                        <div class="rls-scan-progress-fill" id="rls-scan-progress-fill"></div>
+                    </div>
+                    <div class="rls-scan-stats-grid">
+                        <div class="rls-scan-stat">
+                            <span class="rls-scan-stat__num" id="rls-scan-stat-total">0</span>
+                            <span class="rls-scan-stat__label">Всего</span>
+                        </div>
+                        <div class="rls-scan-stat">
+                            <span class="rls-scan-stat__num" id="rls-scan-stat-scanned">0</span>
+                            <span class="rls-scan-stat__label">Проверено</span>
+                        </div>
+                        <div class="rls-scan-stat">
+                            <span class="rls-scan-stat__num" id="rls-scan-stat-skipped">0</span>
+                            <span class="rls-scan-stat__label">Пропущено</span>
+                        </div>
+                        <div class="rls-scan-stat">
+                            <span class="rls-scan-stat__num" id="rls-scan-stat-threats" style="color: var(--rls-danger);">0</span>
+                            <span class="rls-scan-stat__label">Угроз</span>
+                        </div>
+                    </div>
+                    <div class="rls-scan-current-file" id="rls-scan-current-file">
+                        Ожидание…
+                    </div>
+                </div>
+
+                <!-- THREAT DETAILS MODAL -->
+                <div id="rls-threat-modal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.6); backdrop-filter:blur(4px); z-index:100000; align-items:center; justify-content:center;">
+                    <div style="background:#fff; border-radius:14px; width:90%; max-width:640px; max-height:85vh; overflow:hidden; display:flex; flex-direction:column; box-shadow:0 25px 50px rgba(0,0,0,0.3);">
+                        <div style="padding:18px 24px; border-bottom:1px solid var(--rls-border); display:flex; justify-content:space-between; align-items:center;">
+                            <h2 style="margin:0;">Детали угрозы</h2>
+                            <button type="button" class="button" id="rls-threat-modal-close">Закрыть</button>
+                        </div>
+                        <div style="padding:24px; overflow-y:auto;" class="rls-modal-body"></div>
                     </div>
                 </div>
             </div>
