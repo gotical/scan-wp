@@ -431,11 +431,24 @@ class RLS_Admin_Pages {
     }
 
     public function render_license_page() {
+        $this->render_page_heading(
+            'Лицензия',
+            'dashicons-admin-network',
+            'Управление лицензионным ключом Premium.'
+        );
         $this->render_settings_section_page( 'license', 'tab-general' );
+        echo '</div><!-- .rls-wrap -->';
     }
 
     public function render_protection_mode_page() {
+        $this->render_page_heading(
+            'Режим защиты',
+            'dashicons-shield-alt',
+            'Выберите профиль защиты и пресет для вашего сайта.',
+            [ 'mode' => true ]
+        );
         require RLS_PLUGIN_PATH . 'includes/admin/views/protection-mode-page.php';
+        echo '</div><!-- .rls-wrap -->';
     }
 
     public function ajax_apply_protection_mode() {
@@ -483,46 +496,104 @@ class RLS_Admin_Pages {
     }
 
     public function render_firewall_page() {
+        $this->render_page_heading(
+            'Фаервол',
+            'dashicons-shield',
+            'WAF: фильтрация SQLi, XSS, RCE, LFI, ботов и подозрительных запросов.'
+        );
         $this->render_settings_section_page( 'firewall', 'tab-firewall' );
+        echo '</div><!-- .rls-wrap -->';
     }
 
     public function render_blacklist_page() {
+        $this->render_page_heading(
+            'Черный список',
+            'dashicons-dismiss',
+            'Управление whitelist / blacklist IP, временные блокировки.'
+        );
         $this->render_settings_section_page( 'blacklist', 'tab-lists' );
+        echo '</div><!-- .rls-wrap -->';
     }
 
     public function render_login_security_page() {
+        $this->render_page_heading(
+            'Защита входа',
+            'dashicons-lock',
+            'Brute-force защита, honeypot, контрольные вопросы.'
+        );
         $this->render_settings_section_page( 'login-security', 'tab-general' );
+        echo '</div><!-- .rls-wrap -->';
     }
 
     public function render_settings_page() {
+        $this->render_page_heading(
+            'Сканер: настройки',
+            'dashicons-admin-generic',
+            'Параметры автоматического сканирования и база сигнатур.'
+        );
         $this->render_settings_section_page( 'settings', 'tab-scanner' );
+        echo '</div><!-- .rls-wrap -->';
     }
 
     public function render_policy_page() {
+        $this->render_page_heading(
+            'Условия и политика',
+            'dashicons-media-document',
+            'Лицензия, ответственность, правила использования.'
+        );
         require_once RLS_PLUGIN_PATH . 'includes/admin/views/policy-page.php';
+        echo '</div><!-- .rls-wrap -->';
     }
 
     public function render_hardening_page() {
+        $this->render_page_heading(
+            'Hardening',
+            'dashicons-shield-alt',
+            'Защита wp-config.php, CSP, скрытие версии WordPress.'
+        );
         $this->render_settings_section_page( 'hardening', 'tab-general' );
+        echo '</div><!-- .rls-wrap -->';
     }
 
     public function render_2fa_page() {
+        $this->render_page_heading(
+            '2FA (двухфакторная аутентификация)',
+            'dashicons-smartphone',
+            'TOTP аутентификация для администраторов (Google Authenticator, Authy, 1Password).'
+        );
         $this->render_settings_section_page( '2fa', 'tab-general' );
+        echo '</div><!-- .rls-wrap -->';
     }
 
     public function render_notifications_page() {
+        $this->render_page_heading(
+            'Email-уведомления',
+            'dashicons-email-alt',
+            'Настройка событий для email-уведомлений администратору.'
+        );
         $this->render_settings_section_page( 'notifications', 'tab-general' );
+        echo '</div><!-- .rls-wrap -->';
     }
 
     public function render_monitoring_page() {
+        $this->render_page_heading(
+            'Мониторинг',
+            'dashicons-dashboard',
+            'Real-time дашборд: текущие атаки, страны, типы.'
+        );
         $monitor = new RLS_Monitoring_Dashboard();
         $monitor->render_page();
+        echo '</div><!-- .rls-wrap -->';
     }
 
     public function render_health_page() {
         $health = new RLS_Health();
         $checks = $health->run_checks();
-        echo '<div class="wrap"><h1>Диагностика системы</h1>';
+        $this->render_page_heading(
+            'Диагностика',
+            'dashicons-admin-site',
+            'Проверка системы, конфликтов плагинов, модулей.'
+        );
         echo '<table class="wp-list-table widefat striped"><thead><tr><th>Проверка</th><th>Значение</th><th>Статус</th></tr></thead><tbody>';
         foreach ( $checks as $c ) {
             $status_label = $c['status'] === 'ok' ? 'OK' : ( $c['status'] === 'warn' ? 'WARN' : 'ERR' );
@@ -532,11 +603,17 @@ class RLS_Admin_Pages {
         }
         echo '</tbody></table>';
         echo '<p><a href="' . esc_url( wp_nonce_url( admin_url( 'admin-ajax.php?action=rls_health_export' ), 'rls_health_nonce', 'nonce' ) ) . '" class="button">Экспорт отчёта</a></p>';
-        echo '</div>';
+        echo '</div><!-- .rls-wrap -->';
     }
 
     public function render_wizard_page() {
+        $this->render_page_heading(
+            'Мастер настройки',
+            'dashicons-welcome-learn-more',
+            'Пошаговая настройка плагина для первого запуска.'
+        );
         require_once RLS_PLUGIN_PATH . 'includes/admin/views/wizard.php';
+        echo '</div><!-- .rls-wrap -->';
     }
 
     public function render_captcha_page() {
@@ -549,32 +626,74 @@ class RLS_Admin_Pages {
     }
 
     public function render_analytics_page() {
+        $this->render_page_heading(
+            'Аналитика',
+            'dashicons-chart-line',
+            'Статистика атак, неудачных входов, типов и стран.'
+        );
         $analytics = new RLS_Analytics_Page();
         $analytics->render_page();
+        echo '</div><!-- .rls-wrap -->';
     }
 
     public function render_attack_map_page() {
+        $this->render_page_heading(
+            'Карта атак',
+            'dashicons-admin-site',
+            'География источников угроз на интерактивной карте мира.'
+        );
         require_once RLS_PLUGIN_PATH . 'includes/admin/views/world-map.php';
+        echo '</div><!-- .rls-wrap -->';
     }
 
     public function render_anomaly_page() {
+        $this->render_page_heading(
+            'Anomaly Detection',
+            'dashicons-warning',
+            'Обнаружение нетипичных паттернов входа пользователей.'
+        );
         require_once RLS_PLUGIN_PATH . 'includes/admin/views/anomaly-heatmap.php';
+        echo '</div><!-- .rls-wrap -->';
     }
 
     public function render_correlation_page() {
+        $this->render_page_heading(
+            'Корреляция атак',
+            'dashicons-networking',
+            'Связывание связанных атак в кампании (IP, UA, URI).'
+        );
         require_once RLS_PLUGIN_PATH . 'includes/admin/views/correlation-page.php';
+        echo '</div><!-- .rls-wrap -->';
     }
 
     public function render_reports_page() {
+        $this->render_page_heading(
+            'Отчёты',
+            'dashicons-email',
+            'Email + HTML отчёты по безопасности (print-ready PDF).'
+        );
         require_once RLS_PLUGIN_PATH . 'includes/admin/views/reports-page.php';
+        echo '</div><!-- .rls-wrap -->';
     }
 
     public function render_webhooks_page() {
+        $this->render_page_heading(
+            'Webhooks',
+            'dashicons-rest-api',
+            'Slack, Discord, Telegram, Custom.'
+        );
         require_once RLS_PLUGIN_PATH . 'includes/admin/views/webhooks-page.php';
+        echo '</div><!-- .rls-wrap -->';
     }
 
     public function render_attack_types_page() {
+        $this->render_page_heading(
+            'Типы атак',
+            'dashicons-warning',
+            'Полный справочник 18 типов угроз с подробными описаниями.'
+        );
         require_once RLS_PLUGIN_PATH . 'includes/admin/views/attack-types-page.php';
+        echo '</div><!-- .rls-wrap -->';
     }
 
     /**
@@ -590,6 +709,40 @@ class RLS_Admin_Pages {
     /**
      * Helper: render the premium banner (CTA or showcase) for inclusion in other views.
      */
+    /**
+     * Unified page heading helper.
+     * Use this at the top of every page render method for consistent styling.
+     */
+    public function render_page_heading( $title, $icon = 'dashicons-admin-generic', $subtitle = '', $extra = [] ) {
+        $mode = $extra['mode'] ?? '';
+        $extra_badge = $extra['badge'] ?? '';
+        $version = $extra['version'] ?? ( defined( 'RLS_VERSION' ) ? RLS_VERSION : '' );
+        ?>
+        <div class="wrap rls-wrap">
+            <h1 class="rls-page-heading">
+                <span class="dashicons <?php echo esc_attr( $icon ); ?>"></span>
+                <?php echo esc_html( $title ); ?>
+                <?php if ( $version ) : ?>
+                    <span class="rls-page-version">v<?php echo esc_html( $version ); ?></span>
+                <?php endif; ?>
+                <?php if ( $extra_badge ) : ?>
+                    <span class="rls-mode-badge <?php echo esc_attr( $extra['badge_class'] ?? '' ); ?>">
+                        <?php echo esc_html( $extra_badge ); ?>
+                    </span>
+                <?php endif; ?>
+                <?php if ( $mode && function_exists( 'rls_get_protection_mode_ui_state' ) ) :
+                    $mode_ui = rls_get_protection_mode_ui_state(); ?>
+                    <span class="rls-mode-badge <?php echo esc_attr( $mode_ui['mode'] ?? 'full' ); ?>">
+                        <?php echo esc_html( $mode_ui['label'] ?? 'Полная защита' ); ?>
+                    </span>
+                <?php endif; ?>
+            </h1>
+            <?php if ( $subtitle ) : ?>
+                <p class="rls-page-subtitle-block"><?php echo esc_html( $subtitle ); ?></p>
+            <?php endif; ?>
+        <?php
+    }
+
     public function render_premium_banner( $args = [] ) {
         require_once RLS_PLUGIN_PATH . 'includes/admin/views/premium-banner.php';
     }

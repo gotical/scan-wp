@@ -3954,3 +3954,22 @@ body.rls-tooltip-lock {
     border-radius: 4px !important;
     font-family: var(--rls-mono) !important;
 }
+
+/* === v3.0.6 — UNIFIED HEADERS + SUBTITLES === */
+.rls-page-subtitle-block {
+    margin: -8px 0 18px;
+    padding: 0;
+    color: var(--rls-text-muted);
+    font-size: 14px;
+    line-height: 1.5;
+    max-width: 80ch;
+}
+.rls-page-heading .rls-page-version {
+    background: var(--rls-surface-alt);
+    color: var(--rls-text-muted);
+    padding: 3px 12px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 500;
+    vertical-align: middle;
+}

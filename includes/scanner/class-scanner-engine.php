@@ -40,7 +40,44 @@ class RLS_Scanner_Engine {
         'wp-content/upgrade', 'wp-content/ai1wm-backups',
         'wp-content/uploads', 'wp-content/w3tc-config',
         'wp-content/wflogs', 'wp-content/debug.log',
-        'wp-content/mu-plugins',
+        // Plugins where legitimate code is very rare for virus injection (mostly build/js):
+        'wp-content/plugins/wordfence',
+        'wp-content/plugins/akismet',
+        'wp-content/plugins/woocommerce',
+        'wp-content/plugins/elementor',
+        'wp-content/plugins/elementor-pro',
+        'wp-content/plugins/wpforms-lite',
+        'wp-content/plugins/jetpack',
+        'wp-content/plugins/updraftplus',
+        'wp-content/plugins/all-in-one-seo-pack',
+        'wp-content/plugins/autoptimize',
+        'wp-content/plugins/wp-rocket',
+        'wp-content/plugins/litespeed-cache',
+        'wp-content/plugins/redirection',
+        'wp-content/plugins/really-simple-ssl',
+        'wp-content/plugins/wordpress-seo',
+        'wp-content/plugins/duplicate-post',
+        'wp-content/plugins/regenerate-thumbnails',
+        'wp-content/plugins/contact-form-7',
+        'wp-content/plugins/wpforms',
+        'wp-content/plugins/classic-editor',
+        'wp-content/plugins/loco-translate',
+        'wp-content/plugins/wp-google-maps',
+        'wp-content/plugins/tablepress',
+        'wp-content/plugins/ninja-forms',
+        'wp-content/plugins/duplicate-page',
+        'wp-content/plugins/svg-support',
+        'wp-content/plugins/wordfence-assistant',
+        // Common themes with 1000+ files (Elementor, Avada, etc.):
+        'wp-content/themes/astra',
+        'wp-content/themes/avada',
+        'wp-content/themes/generatepress',
+        'wp-content/themes/divi',
+        'wp-content/themes/flavor',
+        'wp-content/themes/responsive',
+        // Media uploads:
+        'wp-content/uploads',
+        // Core dirs:
         'wp-admin',
         'languages', 'i18n',
     ];
@@ -163,13 +200,15 @@ class RLS_Scanner_Engine {
         
         $start_time = microtime(true);
         $dirs_processed = 0;
+        $max_files = 3000; // Hard cap to prevent timeouts/memory issues.
 
         while ( ! empty( $dirs ) ) {
             if ( (microtime(true) - $start_time) > self::TIME_LIMIT ) break;
+            if ( count( $files ) >= $max_files ) break;
 
             $current_dir = array_shift( $dirs );
             $dirs_processed++;
-            
+
             try {
                 if ( ! is_dir( $current_dir ) || ! is_readable( $current_dir ) ) continue;
                 $items = @scandir( $current_dir );
@@ -178,12 +217,13 @@ class RLS_Scanner_Engine {
                 foreach ( $items as $item ) {
                     if ( $item === '.' || $item === '..' ) continue;
                     $path = $current_dir . DIRECTORY_SEPARATOR . $item;
-                    
+
                     if ( $this->is_path_excluded( $path, $mode ) ) continue;
-                    
+
                     if ( is_dir( $path ) && ! is_link( $path ) ) {
                         $dirs[] = $path;
                     } elseif ( is_file( $path ) ) {
+                        if ( count( $files ) >= $max_files ) break;
                         if ( $this->should_include_discovered_file( $path, $item, $mode ) ) {
                             $files[] = $path;
                         }
@@ -603,10 +643,12 @@ class RLS_Scanner_Engine {
      */
     public function scan_single_file_enhanced( $file_path, $with_heuristics = true ) {
         if ( ! file_exists( $file_path ) || ! is_readable( $file_path ) ) return [];
+        // Skip very large files (>1MB) to avoid memory issues.
+        $size = @filesize( $file_path );
+        if ( $size !== false && $size > 1024 * 1024 ) return [];
         $content = @file_get_contents( $file_path );
         if ( $content === false ) return [];
-        // Skip very large files (>5MB) to avoid memory issues.
-        if ( strlen( $content ) > 5 * 1024 * 1024 ) return [];
+        if ( strlen( $content ) > 1024 * 1024 ) return [];
 
         $findings = [];
 
