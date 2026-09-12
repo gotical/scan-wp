@@ -257,16 +257,33 @@ let isWorking = false;
                 // Если ошибка сети или тайм-аут, пробуем снова
                 if (retryCount < 5) { 
                     retryCount++;
-                    let details = '';
+let details = '';
                     if (xhr && xhr.status) {
                         details = ` (HTTP ${xhr.status})`;
                     } else if (status) {
                         details = ` (${status})`;
                     }
+                    // Don't retry on WP fatal errors or HTTP 5xx — they won't recover.
+                    let bodyText = (xhr && xhr.responseText) ? xhr.responseText : '';
+                    let isFatal = bodyText.indexOf('возникла критическая ошибка') !== -1 ||
+                                  bodyText.indexOf('fatal error') !== -1 ||
+                                  bodyText.indexOf('parse error') !== -1 ||
+                                  (xhr && xhr.status >= 500);
+                    if (isFatal) {
+                        isWorking = false;
+                        $('.rls-scan-controls button').prop('disabled', false);
+                        if (progressFill) progressFill.css('background', '#dc2626');
+                        if (progressPctEl) progressPctEl.text('ERR');
+                        statusTitle.html('<span style="color:#dc2626;">⚠ Серверная ошибка</span>');
+                        const hint = bodyText.substring(0, 300).replace(/<[^>]+>/g, '');
+                        if (progressCurrent) progressCurrent.html('<span style="color:#dc2626;">' + esc(hint) + '</span>');
+                        logConsole('ОШИБКА', 'Критическая серверная ошибка (повтор невозможен)', 'error');
+                        return;
+                    }
                     statusText.text(`Сбой сети${details}. Повтор ${retryCount}/5...`);
-                    
-                    setTimeout(function() { 
-                        ajaxCall(action, data, successCallback); 
+
+                    setTimeout(function() {
+                        ajaxCall(action, data, successCallback);
                     }, 3000);
                 } else {
                     const responseHint = (xhr && xhr.responseText) ? String(xhr.responseText).substring(0, 200) : '';

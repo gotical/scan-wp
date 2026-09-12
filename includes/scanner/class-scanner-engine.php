@@ -11,7 +11,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class RLS_Scanner_Engine {
 
-    const TIME_LIMIT = 5; 
+    const TIME_LIMIT = 25; // seconds per AJAX step
     const MAX_FILE_SIZE = 2097152; // 2MB
 
     // Очищенные паттерны Regex (Без ложных срабатываний)
@@ -32,12 +32,17 @@ class RLS_Scanner_Engine {
         'r57.php', 'c99.php', 'c100.php', 'phpinfo.php', 'perlinfo.php', 'ofc_upload_image.php'
     ];
 
-    private $excluded_paths = [ 
-        '.git', '.svn', 'node_modules', 'vendor', 
-        'cache', 'backups', 'backup', 
-        'wp-content/cache', 'wp-content/backups', 
+    private $excluded_paths = [
+        '.git', '.svn', '.hg', '.bzr',
+        'node_modules', 'vendor', 'bower_components',
+        'cache', 'backups', 'backup', 'tmp', 'temp',
+        'wp-content/cache', 'wp-content/backups', 'wp-content/backup*',
         'wp-content/upgrade', 'wp-content/ai1wm-backups',
-        'wp-content/uploads' 
+        'wp-content/uploads', 'wp-content/w3tc-config',
+        'wp-content/wflogs', 'wp-content/debug.log',
+        'wp-content/mu-plugins',
+        'wp-admin',
+        'languages', 'i18n',
     ];
 
     public function init() {
@@ -198,12 +203,24 @@ class RLS_Scanner_Engine {
         check_ajax_referer( 'rls_scanner_nonce', 'nonce' );
         if (function_exists('set_time_limit')) @set_time_limit(60);
 
+        // Try to raise memory limit to avoid crashes on large scans.
+        if ( function_exists( 'wp_raise_memory_limit' ) ) {
+            @wp_raise_memory_limit( 'admin' );
+        } elseif ( function_exists( 'ini_set' ) ) {
+            @ini_set( 'memory_limit', '512M' );
+        }
+        @ini_set( 'max_execution_time', 120 );
+
         $offset = isset( $_POST['offset'] ) ? intval( $_POST['offset'] ) : 0;
         $file_list = get_transient( 'rls_scan_file_list' );
         $max_file_size = $this->get_scan_file_size_limit();
 
-        if ( $file_list === false ) wp_send_json_error( 'Session expired' );
+        if ( $file_list === false ) {
+            wp_send_json_error( 'Session expired (no file list)' );
+        }
 
+        // Limit batch size to prevent memory issues.
+        $batch_limit = 25;
         $total_files = count($file_list);
         $processed = 0;
         $found_threats = [];
@@ -211,7 +228,7 @@ class RLS_Scanner_Engine {
         $last_file = '';
         $start_time = microtime(true);
 
-        while ( ($offset + $processed) < $total_files ) {
+        while ( ($offset + $processed) < $total_files && $processed < $batch_limit ) {
             if ( (microtime(true) - $start_time) > self::TIME_LIMIT ) break;
 
             $idx = $offset + $processed;
@@ -327,9 +344,19 @@ class RLS_Scanner_Engine {
 
     private function is_path_excluded( $path, $mode = 'important' ) {
         $path = str_replace( '\\', '/', $path );
-        if ( strpos( $path, 'wp-content/plugins/rybinsklab-security' ) !== false ) return true;
-        if ( sanitize_key( (string) $mode ) === 'full' ) return false;
-        foreach ( $this->excluded_paths as $ex ) if ( strpos( $path, '/' . $ex . '/' ) !== false ) return true;
+        // Always exclude our own plugin directory.
+        if ( strpos( $path, '/wp-content/plugins/rybinsklab-security/' ) !== false ) return true;
+        // Full scan: include everything (admin user request).
+        if ( sanitize_key( (string) $mode ) === 'full' ) {
+            // But still skip huge irrelevant dirs to avoid timeout.
+            foreach ( [ 'node_modules', 'vendor', '.git', 'wp-content/uploads/' ] as $ex ) {
+                if ( strpos( $path, '/' . $ex . '/' ) !== false ) return true;
+            }
+            return false;
+        }
+        foreach ( $this->excluded_paths as $ex ) {
+            if ( strpos( $path, '/' . $ex . '/' ) !== false ) return true;
+        }
         return false;
     }
 

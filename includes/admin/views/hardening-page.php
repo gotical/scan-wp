@@ -12,6 +12,13 @@ if ( ! is_array( $settings ) ) $settings = [];
 $hardening_applied = (bool) get_option( 'rls_hardening_applied' );
 $htaccess_writable = RLS_Hardening::is_htaccess_writable();
 ?>
+<div class="wrap rls-wrap">
+    <h1 class="rls-page-heading">
+        <span class="dashicons dashicons-shield-alt"></span>
+        Hardening
+        <span class="rls-page-version">v<?php echo esc_html( RLS_VERSION ); ?></span>
+    </h1>
+
 <div class="rls-box">
     <h2><span class="dashicons dashicons-shield"></span> WordPress Hardening</h2>
     <p>Эти правила добавляются в <code>.htaccess</code> в корне сайта и в <code>wp-includes</code>. Они закрывают типовые вектора атак на WordPress.</p>
@@ -87,3 +94,5 @@ $htaccess_writable = RLS_Hardening::is_htaccess_writable();
         </tr>
     </table>
 </div>
+
+</div><!-- .rls-wrap -->

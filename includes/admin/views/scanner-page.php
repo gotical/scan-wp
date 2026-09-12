@@ -63,6 +63,63 @@ if ( class_exists( 'RLS_Quarantine' ) ) {
                     Полное сканирование
                 </button>
             </div>
+
+            <!-- ПРОГРЕСС — появляется прямо под кнопкой после старта -->
+            <div id="rls-scan-progress-area" class="rls-progress-card" style="display:none;">
+                <div class="rls-progress-header">
+                    <div class="rls-progress-title">
+                        <span class="dashicons dashicons-update rls-spin-icon"></span>
+                        <strong id="rls-scan-status-title">Выполняется сканирование…</strong>
+                    </div>
+                    <div class="rls-progress-meta">
+                        <div class="rls-progress-meta-item">
+                            <span class="rls-progress-meta-label">ETA</span>
+                            <strong id="rls-scan-eta">--:--</strong>
+                        </div>
+                        <div class="rls-progress-meta-item">
+                            <span class="rls-progress-meta-label">Прогресс</span>
+                            <strong id="rls-scan-progress-pct">0%</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="rls-progress-bar">
+                    <div class="rls-progress-fill" id="rls-scan-progress-fill"></div>
+                </div>
+
+                <div class="rls-progress-stats">
+                    <div class="rls-progress-stat">
+                        <div class="rls-progress-stat-num" id="rls-scan-stat-total">0</div>
+                        <div class="rls-progress-stat-label">Всего файлов</div>
+                    </div>
+                    <div class="rls-progress-stat">
+                        <div class="rls-progress-stat-num" id="rls-scan-stat-scanned">0</div>
+                        <div class="rls-progress-stat-label">Проверено</div>
+                    </div>
+                    <div class="rls-progress-stat">
+                        <div class="rls-progress-stat-num" id="rls-scan-stat-skipped">0</div>
+                        <div class="rls-progress-stat-label">Пропущено</div>
+                    </div>
+                    <div class="rls-progress-stat rls-progress-stat--danger">
+                        <div class="rls-progress-stat-num" id="rls-scan-stat-threats">0</div>
+                        <div class="rls-progress-stat-label">Угроз</div>
+                    </div>
+                </div>
+
+                <div class="rls-progress-current" id="rls-scan-current-file">
+                    <span class="dashicons dashicons-media-default"></span>
+                    <span>Ожидание запуска…</span>
+                </div>
+
+                <div class="rls-progress-console-wrap">
+                    <div class="rls-progress-console-header">
+                        <span class="dashicons dashicons-list-view"></span>
+                        <strong>Журнал выполнения</strong>
+                        <button type="button" class="button rls-console-clear">Очистить</button>
+                    </div>
+                    <div class="rls-progress-console" id="rls-scan-console"></div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -207,64 +264,6 @@ if ( class_exists( 'RLS_Quarantine' ) ) {
                     </tbody>
                 </table>
             <?php endif; ?>
-        </div>
-    </div>
-
-    <!-- ОБЛАСТЬ ПРОГРЕССА + КОНСОЛЬ + РЕЗУЛЬТАТЫ -->
-    <div id="rls-scan-progress-area" class="rls-progress-card" style="display:none;">
-        <div class="rls-progress-header">
-            <div class="rls-progress-title">
-                <span class="spinner is-active" style="float:none; visibility:hidden;"></span>
-                <span class="dashicons dashicons-update rls-spin-icon"></span>
-                <strong id="rls-scan-status-title">Выполняется сканирование…</strong>
-            </div>
-            <div class="rls-progress-meta">
-                <div class="rls-progress-meta-item">
-                    <span class="rls-progress-meta-label">ETA</span>
-                    <strong id="rls-scan-eta">--:--</strong>
-                </div>
-                <div class="rls-progress-meta-item">
-                    <span class="rls-progress-meta-label">Прогресс</span>
-                    <strong id="rls-scan-progress-pct">0%</strong>
-                </div>
-            </div>
-        </div>
-
-        <div class="rls-progress-bar">
-            <div class="rls-progress-fill" id="rls-scan-progress-fill"></div>
-        </div>
-
-        <div class="rls-progress-stats">
-            <div class="rls-progress-stat">
-                <div class="rls-progress-stat-num" id="rls-scan-stat-total">0</div>
-                <div class="rls-progress-stat-label">Всего файлов</div>
-            </div>
-            <div class="rls-progress-stat">
-                <div class="rls-progress-stat-num" id="rls-scan-stat-scanned">0</div>
-                <div class="rls-progress-stat-label">Проверено</div>
-            </div>
-            <div class="rls-progress-stat">
-                <div class="rls-progress-stat-num" id="rls-scan-stat-skipped">0</div>
-                <div class="rls-progress-stat-label">Пропущено</div>
-            </div>
-            <div class="rls-progress-stat rls-progress-stat--danger">
-                <div class="rls-progress-stat-num" id="rls-scan-stat-threats">0</div>
-                <div class="rls-progress-stat-label">Угроз</div>
-            </div>
-        </div>
-
-        <div class="rls-progress-current" id="rls-scan-current-file">
-            <span class="dashicons dashicons-media-default"></span>
-            <span>Ожидание запуска…</span>
-        </div>
-
-        <div class="rls-progress-console-wrap">
-            <div class="rls-progress-console-header">
-                <span class="dashicons dashicons-list-view"></span>
-                <strong>Журнал выполнения</strong>
-                <button type="button" class="button rls-console-clear">Очистить</button>
-            </div>
-            <div class="rls-progress-console" id="rls-scan-console"></div>
         </div>
     </div>
 
