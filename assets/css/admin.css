@@ -3781,3 +3781,176 @@
     background: rgba(56,189,248,0.40);
     color: #bae6fd !important;
 }
+
+/* === v3.0.4 — BUG FIXES === */
+
+/* === BLACKLIST / IP LIST — ensure dark text on white bg === */
+.rls-ip-list,
+.rls-ip-list li,
+.rls-ip-list li * {
+    color: var(--rls-text) !important;
+}
+.rls-ip-list li {
+    background: var(--rls-surface) !important;
+}
+.rls-ip-list li:nth-child(odd) {
+    background: var(--rls-surface-alt) !important;
+}
+.rls-ip-list li:hover {
+    background: var(--rls-surface-hover) !important;
+}
+.rls-ip-list li span,
+.rls-ip-list li strong {
+    color: var(--rls-text) !important;
+    background: transparent !important;
+}
+.rls-ip-list .rls-ip-empty {
+    justify-content: center;
+    color: var(--rls-text-subtle) !important;
+    font-style: italic;
+}
+.rls-ip-text {
+    font-family: var(--rls-mono) !important;
+    font-size: 13px !important;
+    color: var(--rls-text) !important;
+    font-weight: 500 !important;
+    flex: 1;
+    word-break: break-all;
+}
+.rls-ip-remove {
+    background: transparent;
+    border: 0;
+    color: var(--rls-danger);
+    font-size: 16px;
+    font-weight: 700;
+    padding: 0 8px;
+    cursor: pointer;
+    border-radius: 999px;
+    transition: all 0.12s;
+    line-height: 1;
+}
+.rls-ip-remove:hover {
+    background: var(--rls-danger-bg);
+    color: var(--rls-danger);
+}
+
+/* New IP card layout (cleaner) */
+.rls-ip-card {
+    background: var(--rls-surface-alt);
+    border: 1px solid var(--rls-border);
+    border-radius: var(--rls-radius);
+    padding: 16px 18px;
+}
+.rls-ip-card h3 {
+    margin: 0 0 12px;
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.rls-ip-card h3 .dashicons {
+    color: var(--rls-success);
+}
+.rls-ip-card:has(h3:nth-child(1)) h3 .dashicons {
+    color: var(--rls-danger);
+}
+.rls-ip-input-group {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+.rls-ip-input {
+    flex: 1;
+    font-family: var(--rls-mono);
+    font-size: 13px;
+    padding: 6px 12px;
+    border: 1px solid var(--rls-border);
+    border-radius: var(--rls-radius-sm);
+    background: #fff;
+    color: var(--rls-text);
+}
+.rls-ip-input:focus {
+    outline: none;
+    border-color: var(--rls-primary);
+    box-shadow: 0 0 0 3px rgba(34,113,177,0.15);
+}
+
+/* === TOOLTIP — click-to-close + proper cleanup === */
+.rls-attack-badge {
+    cursor: help;
+    user-select: none;
+}
+.rls-attack-badge.is-tooltip-visible {
+    z-index: 10;
+}
+.rls-attack-tooltip {
+    pointer-events: auto !important;
+}
+.rls-attack-tooltip-close {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    background: transparent;
+    border: 0;
+    color: rgba(255,255,255,0.7);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 999px;
+}
+.rls-attack-tooltip-close:hover {
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+}
+/* Click anywhere to close */
+body.rls-tooltip-lock {
+    /* No additional CSS; JS handles lock state */
+}
+
+/* === CLOUD STATS === */
+.rls-cloud-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin: 12px 0;
+}
+.rls-cloud-stat {
+    background: var(--rls-surface);
+    border: 1px solid var(--rls-border);
+    border-radius: var(--rls-radius-sm);
+    padding: 14px 16px;
+    text-align: center;
+}
+.rls-cloud-stat-num {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--rls-primary);
+    line-height: 1.1;
+}
+.rls-cloud-stat-label {
+    font-size: 11px;
+    color: var(--rls-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-top: 4px;
+}
+
+/* === BOTS TABLE === */
+.rls-bots-table thead th {
+    background: var(--rls-surface-alt) !important;
+}
+.rls-bots-table tbody tr {
+    transition: background 0.12s;
+}
+.rls-bots-table tbody tr:hover {
+    background: var(--rls-surface-hover);
+}
+.rls-bots-table code {
+    background: #f1f5f9 !important;
+    color: #1e293b !important;
+    padding: 2px 8px !important;
+    border-radius: 4px !important;
+    font-family: var(--rls-mono) !important;
+}

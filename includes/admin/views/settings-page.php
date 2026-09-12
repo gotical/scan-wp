@@ -815,115 +815,155 @@ $rls_section_nav = [
                 </div>
             </div>
 
-        <!-- ТАБ 3: СПИСКИ IP -->
+<!-- ТАБ 3: СПИСКИ IP -->
         <div class="rls-tab-content" id="tab-lists" data-rls-visible-modes="light,full" data-rls-section-box="blacklist">
-            <div class="rls-row" style="display:flex; gap:20px; flex-wrap: wrap;">
-                
-                <!-- Белый список -->
-                <div class="rls-col rls-box" style="flex:1; min-width: 300px;">
-                    <h2 style="color:green; border-bottom: 2px solid green; padding-bottom: 10px;">Белый список IP (Whitelist)</h2>
-                    <p class="description">IP из этого списка <strong>полностью игнорируют</strong> все проверки (WAF, Лимиты входа).</p>
-                    
-                    <div class="rls-ip-input-group" style="display:flex; gap:5px; margin-bottom: 10px;">
-                        <input type="text" id="rls-new-white-ip" placeholder="192.168.1.1" style="width:100%;">
-                        <button type="button" class="button button-secondary rls-add-ip-btn" data-list="white">Добавить</button>
-                    </div>
-                    
-                    <ul class="rls-ip-list" id="rls-white-list">
-                        <?php foreach($whitelist as $ip): ?>
-                            <li><span><?php echo esc_html($ip); ?></span> <a href="#" class="rls-del-ip" data-ip="<?php echo esc_attr($ip); ?>" data-list="white">&times;</a></li>
-                        <?php endforeach; ?>
-                    </ul>
-                </div>
 
-                <!-- Черный список -->
-                <div class="rls-col rls-box" style="flex:1; min-width: 300px;">
-                    <h2 style="color:red; border-bottom: 2px solid red; padding-bottom: 10px;">Черный список IP (Blacklist)</h2>
-                    <p class="description">IP из этого списка получают вечный бан (403 Forbidden).</p>
-                    
-                    <div class="rls-ip-input-group" style="display:flex; gap:5px; margin-bottom: 10px;">
-                        <input type="text" id="rls-new-black-ip" placeholder="10.0.0.1" style="width:100%;">
-                        <button type="button" class="button button-secondary rls-add-ip-btn" data-list="black">Забанить</button>
-                    </div>
-                    
-                    <ul class="rls-ip-list" id="rls-black-list">
-                        <?php foreach($blacklist as $ip): ?>
-                            <li><span><?php echo esc_html($ip); ?></span> <a href="#" class="rls-del-ip" data-ip="<?php echo esc_attr($ip); ?>" data-list="black">&times;</a></li>
-                        <?php endforeach; ?>
-                    </ul>
-                </div>
-            </div>
+            <!-- Управление списками -->
+            <div class="rls-box">
+                <h2><span class="dashicons dashicons-list-view"></span> Управление списками IP</h2>
+                <p>Whitelist — IP полностью игнорируют все проверки (WAF, лимиты входа). Blacklist — IP получают вечный бан (403 Forbidden).</p>
 
-            <div class="rls-box" style="margin-top:20px;">
-                <h2 style="color:#b32d2e; border-bottom:2px solid #d63638; padding-bottom:10px;">Временно заблокированные IP</h2>
-                <p class="description">Здесь показаны IP, заблокированные защитой (WAF/BruteForce). Вы можете снять блокировку или добавить IP в белый список.</p>
-
-                <ul class="rls-ip-list" id="rls-blocked-runtime-list">
-                    <?php
-                    $runtime_items = [];
-                    $now_ts = time();
-                    if ( is_array( $blocked_ips ) ) {
-                        foreach ( $blocked_ips as $ip => $row ) {
-                            $exp = is_array( $row ) ? (int) ( $row['expires'] ?? 0 ) : (int) $row;
-                            $reason = is_array( $row ) ? (string) ( $row['reason'] ?? 'WAF block' ) : 'WAF block';
-                            if ( filter_var( $ip, FILTER_VALIDATE_IP ) && $exp > $now_ts ) {
-                                $runtime_items[ $ip ] = [ 'expires' => $exp, 'reason' => $reason ];
-                            }
-                        }
-                    }
-                    if ( is_array( $locked_ips ) ) {
-                        foreach ( $locked_ips as $ip => $row ) {
-                            $exp = is_array( $row ) ? (int) ( $row['expires'] ?? 0 ) : (int) $row;
-                            if ( filter_var( $ip, FILTER_VALIDATE_IP ) && $exp > $now_ts ) {
-                                if ( ! isset( $runtime_items[ $ip ] ) || $runtime_items[ $ip ]['expires'] < $exp ) {
-                                    $runtime_items[ $ip ] = [ 'expires' => $exp, 'reason' => 'BruteForce lockout' ];
-                                }
-                            }
-                        }
-                    }
-                    if ( ! empty( $runtime_items ) ):
-                        foreach ( $runtime_items as $ip => $meta ):
-                            $left = max( 0, (int) $meta['expires'] - $now_ts );
-                            ?>
-                            <li data-ip="<?php echo esc_attr( $ip ); ?>">
-                                <span>
-                                    <strong><?php echo esc_html( $ip ); ?></strong>
-                                    <br><small>Причина: <?php echo esc_html( $meta['reason'] ); ?> | Осталось: <?php echo esc_html( gmdate( 'H:i:s', $left ) ); ?></small>
-                                </span>
-                                <span style="display:inline-flex; gap:8px; align-items:center;">
-                                    <button type="button" class="button button-small rls-move-blocked-to-black" data-ip="<?php echo esc_attr( $ip ); ?>">В черный</button>
-                                    <button type="button" class="button button-small rls-move-blocked-to-white" data-ip="<?php echo esc_attr( $ip ); ?>">В белый</button>
-                                    <button type="button" class="button button-small rls-unblock-ip" data-ip="<?php echo esc_attr( $ip ); ?>">Снять блок</button>
-                                </span>
-                            </li>
-                            <?php
-                        endforeach;
-                    else:
-                        ?>
-                        <li><span>Активных временных блокировок нет.</span></li>
-                    <?php endif; ?>
-                </ul>
-            </div>
-            
-            <div class="rls-box" style="margin-top: 20px; background: #f0f0f1; border-color: #999;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <div>
-                        <h3><span class="dashicons dashicons-cloud"></span> Глобальный Черный список (Rybinsk Lab)</h3>
-                        <p>Загружено IP-адресов из облачной базы угроз: <strong style="font-size: 1.2em;"><?php echo count($global_blacklist); ?></strong></p>
-                        <p class="description">Этот список обновляется автоматически при наличии лицензии.</p>
-                        <?php if ( ! $is_premium ): ?>
-                            <p class="description"><strong>Коллективная защита</strong> (облачный blacklist) доступна в Premium.</p>
-                            <p><a class="button button-primary" target="_blank" rel="noopener noreferrer" href="<?php echo esc_url( $premium_buy_url ); ?>">Подключить Premium</a></p>
-                        <?php endif; ?>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:18px;">
+                    <!-- Белый список -->
+                    <div class="rls-ip-card">
+                        <h3><span class="dashicons dashicons-yes"></span> Белый список (Whitelist)</h3>
+                        <div class="rls-ip-input-group">
+                            <input type="text" id="rls-new-white-ip" class="rls-ip-input" placeholder="192.168.1.1" />
+                            <button type="button" class="button button-primary rls-add-ip-btn" data-list="white">Добавить</button>
+                        </div>
+                        <ul class="rls-ip-list" id="rls-white-list">
+                            <?php if ( empty( $whitelist ) ) : ?>
+                                <li class="rls-ip-empty"><span>— пусто —</span></li>
+                            <?php else : foreach ( $whitelist as $ip ) : ?>
+                                <li>
+                                    <span class="rls-ip-text"><?php echo esc_html( $ip ); ?></span>
+                                    <button class="rls-ip-remove rls-del-ip" data-ip="<?php echo esc_attr( $ip ); ?>" data-list="white" title="Удалить">×</button>
+                                </li>
+                            <?php endforeach; endif; ?>
+                        </ul>
                     </div>
-                    <div>
-                        <!-- КНОПКА ОБНОВЛЕНИЯ IP -->
-                        <button type="button" class="button button-secondary" onclick="document.getElementById('rls-manual-sync-form').submit();" <?php disabled( ! $is_premium ); ?>>
-                            <span class="dashicons dashicons-update"></span> Обновить список IP
-                        </button>
+
+                    <!-- Черный список -->
+                    <div class="rls-ip-card">
+                        <h3><span class="dashicons dashicons-dismiss"></span> Черный список (Blacklist)</h3>
+                        <div class="rls-ip-input-group">
+                            <input type="text" id="rls-new-black-ip" class="rls-ip-input" placeholder="10.0.0.1 или 192.168.1.0/24" />
+                            <button type="button" class="button rls-add-ip-btn" data-list="black" style="background:#dc2626; color:#fff; border-color:#dc2626;">Забанить</button>
+                        </div>
+                        <ul class="rls-ip-list" id="rls-black-list">
+                            <?php if ( empty( $blacklist ) ) : ?>
+                                <li class="rls-ip-empty"><span>— пусто —</span></li>
+                            <?php else : foreach ( $blacklist as $ip ) : ?>
+                                <li>
+                                    <span class="rls-ip-text"><?php echo esc_html( $ip ); ?></span>
+                                    <button class="rls-ip-remove rls-del-ip" data-ip="<?php echo esc_attr( $ip ); ?>" data-list="black" title="Удалить">×</button>
+                                </li>
+                            <?php endforeach; endif; ?>
+                        </ul>
                     </div>
                 </div>
             </div>
+
+            <!-- Временно заблокированные -->
+            <div class="rls-box">
+                <h2><span class="dashicons dashicons-shield"></span> Временно заблокированные</h2>
+                <p>IP, заблокированные защитой WAF / BruteForce. Можно снять блокировку или добавить IP в белый список.</p>
+                <?php $locked_ips = get_option( 'rls_locked_ips', [] ); ?>
+                <?php if ( empty( $locked_ips ) ) : ?>
+                    <div class="rls-empty-state"><p>Нет заблокированных IP.</p></div>
+                <?php else : ?>
+                    <table class="wp-list-table widefat striped">
+                        <thead>
+                            <tr>
+                                <th>IP адрес</th>
+                                <th>Количество блокировок</th>
+                                <th>Последняя блокировка</th>
+                                <th style="width:260px;">Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ( $locked_ips as $ip => $info ) : ?>
+                                <tr>
+                                    <td><code class="rls-ip-code"><?php echo esc_html( $ip ); ?></code></td>
+                                    <td><strong><?php echo intval( $info['count'] ?? 0 ); ?></strong></td>
+                                    <td><?php echo esc_html( $info['last_seen'] ?? '' ); ?></td>
+                                    <td>
+                                        <button class="button button-secondary rls-unblock-ip" data-ip="<?php echo esc_attr( $ip ); ?>" style="margin-right:4px;">Разблокировать</button>
+                                        <button class="button rls-add-ip-btn" data-list="white" data-ip="<?php echo esc_attr( $ip ); ?>" style="background:#16a34a; color:#fff; border-color:#16a34a;">В белый список</button>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                <?php endif; ?>
+            </div>
+
+            <!-- Боты -->
+            <div class="rls-box">
+                <h2><span class="dashicons dashicons-admin-users"></span> Известные боты</h2>
+                <p>Боты, которые можно заблокировать через User-Agent.</p>
+                <table class="wp-list-table widefat striped rls-bots-table">
+                    <thead>
+                        <tr>
+                            <th>Имя бота</th>
+                            <th>User-Agent</th>
+                            <th style="width:160px;">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php
+                        $bots = [
+                            [ 'name' => 'AhrefsBot',  'ua' => 'AhrefsBot/',  'good' => false ],
+                            [ 'name' => 'SemrushBot', 'ua' => 'SemrushBot',  'good' => false ],
+                            [ 'name' => 'MJ12bot',    'ua' => 'MJ12bot',     'good' => false ],
+                            [ 'name' => 'DotBot',     'ua' => 'DotBot',      'good' => false ],
+                            [ 'name' => 'YandexBot',  'ua' => 'YandexBot',   'good' => true  ],
+                            [ 'name' => 'Googlebot',  'ua' => 'Googlebot',   'good' => true  ],
+                        ];
+                        foreach ( $bots as $bot ) : ?>
+                            <tr>
+                                <td><strong><?php echo esc_html( $bot['name'] ); ?></strong></td>
+                                <td><code><?php echo esc_html( $bot['ua'] ); ?></code></td>
+                                <td>
+                                    <?php if ( $bot['good'] ) : ?>
+                                        <span class="rls-status-pill is-on" style="font-size:10px;">Полезный</span>
+                                    <?php else : ?>
+                                        <button class="button button-small rls-block-bot" data-ua="<?php echo esc_attr( $bot['ua'] ); ?>" style="background:#dc2626; color:#fff; border-color:#dc2626;">Заблокировать</button>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+<?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Глобальный облачный черный список -->
+            <div class="rls-box">
+                <h2><span class="dashicons dashicons-cloud"></span> Облачный черный список</h2>
+                <p>Коллективная база угроз от сообщества Rybinsk Lab. Обновляется автоматически.</p>
+                <div class="rls-cloud-stats">
+                    <div class="rls-cloud-stat">
+                        <div class="rls-cloud-stat-num"><?php echo count($global_blacklist); ?></div>
+                        <div class="rls-cloud-stat-label">IP в базе</div>
+                    </div>
+                    <div class="rls-cloud-stat">
+                        <div class="rls-cloud-stat-num"><?php echo $is_premium ? '✓' : '✕'; ?></div>
+                        <div class="rls-cloud-stat-label">Доступ</div>
+                    </div>
+                    <div class="rls-cloud-stat">
+                        <div class="rls-cloud-stat-num">7 дней</div>
+                        <div class="rls-cloud-stat-label">Обновление</div>
+                    </div>
+                </div>
+                <?php if ( ! $is_premium ) : ?>
+                    <p style="margin-top:14px;"><a class="button button-primary" target="_blank" rel="noopener noreferrer" href="<?php echo esc_url( $premium_buy_url ); ?>">Подключить Premium для облачной защиты</a></p>
+                <?php else : ?>
+                    <button type="button" class="button button-secondary" onclick="document.getElementById('rls-manual-sync-form').submit();">
+                        <span class="dashicons dashicons-update"></span> Обновить список IP
+                    </button>
+                <?php endif; ?>
+            </div>
+
         </div>
 
         <!-- ТАБ 4: СКАНЕР И СИГНАТУРЫ -->

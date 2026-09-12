@@ -1018,26 +1018,98 @@
 })(jQuery);
 
 /* =================================================================
- * 14. ATTACK TYPE BADGES + HOVER TOOLTIPS (v2.9.0)
+ * 14. ATTACK TYPE BADGES + HOVER TOOLTIPS (v2.9.0+, v3.0.4 fix)
  * ================================================================= */
 (function($) {
     $(function() {
-        // Render tooltip on hover.
-        $(document).on('mouseenter focus', '[data-rls-attack-type]', function(e) {
-            var el = $(this);
-            if (el.find('.rls-attack-tooltip').length) return;
+        var tooltipHideTimer = null;
+
+        function hideTooltip(el) {
+            el.removeClass('is-tooltip-visible');
+            if (tooltipHideTimer) clearTimeout(tooltipHideTimer);
+            tooltipHideTimer = setTimeout(function() {
+                el.find('.rls-attack-tooltip').remove();
+                el.css('position', '');
+            }, 150);
+        }
+
+        function showTooltip(el) {
+            if (tooltipHideTimer) clearTimeout(tooltipHideTimer);
+            if (el.find('.rls-attack-tooltip').length) {
+                el.addClass('is-tooltip-visible');
+                return;
+            }
             var html = el.attr('data-rls-tooltip-html');
             if (!html) return;
-            el.css('position', 'relative').append(html);
+            // Ensure position context.
+            if (el.css('position') === 'static' || !el.css('position')) {
+                el.css('position', 'relative');
+            }
+            el.append(html);
+            // Force layout, then show.
+            el.find('.rls-attack-tooltip').get(0).offsetHeight;
             el.addClass('is-tooltip-visible');
+        }
+
+        // Show on hover/focus.
+        $(document).on('mouseenter focus', '[data-rls-attack-type]', function(e) {
+            showTooltip($(this));
         });
+
+        // Hide on mouseleave/blur.
         $(document).on('mouseleave blur', '[data-rls-attack-type]', function(e) {
-            var el = $(this);
-            el.removeClass('is-tooltip-visible');
-            // Wait for fade-out before removing.
-            setTimeout(function() {
-                el.find('.rls-attack-tooltip').remove();
-            }, 200);
+            // Use relatedTarget to skip events moving into the tooltip itself.
+            var $el = $(this);
+            var to = e.relatedTarget;
+            if (to && $el.find('.rls-attack-tooltip').get(0).contains(to)) {
+                return;
+            }
+            hideTooltip($el);
+        });
+
+        // Also hide when mouse leaves the tooltip itself.
+        $(document).on('mouseleave', '.rls-attack-tooltip', function(e) {
+            var $tooltip = $(this);
+            var $parent = $tooltip.parent('[data-rls-attack-type]');
+            hideTooltip($parent);
+        });
+
+        // Click close button.
+        $(document).on('click', '.rls-attack-tooltip-close', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var $parent = $(this).closest('[data-rls-attack-type]');
+            hideTooltip($parent);
+        });
+
+        // Click "Подробнее" link should also close.
+        $(document).on('click', '.rls-attack-tooltip__more', function(e) {
+            // Allow default (open in new tab), but close current.
+            var $parent = $(this).closest('[data-rls-attack-type]');
+            setTimeout(function() { hideTooltip($parent); }, 100);
+        });
+
+        // Close on Escape key.
+        $(document).on('keydown', function(e) {
+            if (e.key === 'Escape') {
+                $('.rls-attack-tooltip').each(function() {
+                    var $parent = $(this).closest('[data-rls-attack-type]');
+                    hideTooltip($parent);
+                });
+            }
+        });
+
+        // Close on any click outside the tooltip and trigger.
+        $(document).on('click', function(e) {
+            var $target = $(e.target);
+            if ($target.closest('[data-rls-attack-type]').length) return;
+            if ($target.closest('.rls-attack-tooltip').length) return;
+            // Click outside: close all open tooltips.
+            $('[data-rls-attack-type]').each(function() {
+                if ($(this).find('.rls-attack-tooltip').length) {
+                    hideTooltip($(this));
+                }
+            });
         });
     });
 })(jQuery);

@@ -329,6 +329,7 @@ class RLS_Attack_Types {
         // Компактный тултип: только самое нужное + ссылка "Подробнее".
         $detail_url = admin_url( 'admin.php?page=rls-attack-types' );
         $tooltip_html  = '<div class="rls-attack-tooltip">';
+        $tooltip_html .= '<button type="button" class="rls-attack-tooltip-close" aria-label="Закрыть">×</button>';
         $tooltip_html .= '<div class="rls-attack-tooltip__title">';
         $tooltip_html .= '<span class="dashicons ' . esc_attr( $icon ) . '"></span>';
         $tooltip_html .= '<strong>' . esc_html( $label ) . '</strong>';
