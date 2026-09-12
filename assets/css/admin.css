@@ -2732,3 +2732,940 @@
     opacity: 0.5;
     cursor: wait;
 }
+
+/* === SCANNER v3.0.1 — UI fixes + beautiful progress + console === */
+.rls-page-heading {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 23px;
+    font-weight: 400;
+    margin: 16px 0 12px;
+    color: var(--rls-text);
+}
+.rls-page-heading .dashicons {
+    font-size: 28px;
+    width: 28px;
+    height: 28px;
+    color: var(--rls-primary);
+}
+.rls-page-version {
+    background: var(--rls-surface-alt);
+    color: var(--rls-text-muted);
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 500;
+    margin-left: 4px;
+}
+.rls-mode-badge {
+    background: var(--rls-success-bg);
+    color: var(--rls-success);
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+/* === PROGRESS CARD (Beautiful) === */
+.rls-progress-card {
+    margin: 20px 0;
+    background: var(--rls-surface);
+    border: 1px solid var(--rls-border);
+    border-radius: var(--rls-radius-lg);
+    box-shadow: var(--rls-shadow);
+    overflow: hidden;
+    animation: rls-fade-in-up 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.rls-progress-header {
+    background: linear-gradient(135deg, #1d3a8a 0%, #1e40af 50%, #0e7490 100%);
+    background-size: 200% 200%;
+    animation: rls-gradient-shift 8s ease infinite;
+    color: #fff;
+    padding: 18px 22px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.rls-progress-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 15px;
+}
+.rls-progress-title .dashicons {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+    animation: rls-spin 1.2s linear infinite;
+}
+.rls-progress-meta {
+    display: flex;
+    gap: 18px;
+    align-items: center;
+}
+.rls-progress-meta-item {
+    text-align: center;
+}
+.rls-progress-meta-label {
+    display: block;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    opacity: 0.7;
+    margin-bottom: 2px;
+}
+.rls-progress-meta-item strong {
+    display: block;
+    font-size: 16px;
+    font-variant-numeric: tabular-nums;
+}
+
+/* === PROGRESS BAR === */
+.rls-progress-bar {
+    height: 10px;
+    background: var(--rls-surface-alt);
+    position: relative;
+    overflow: hidden;
+}
+.rls-progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #2271b1, #38bdf8, #16a34a);
+    background-size: 200% 100%;
+    animation: rls-progress-shimmer 1.5s linear infinite;
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 0;
+}
+@keyframes rls-progress-shimmer {
+    0% { background-position: 200% 50%; }
+    100% { background-position: -200% 50%; }
+}
+
+/* === STATS GRID === */
+.rls-progress-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--rls-border);
+    border-bottom: 1px solid var(--rls-border);
+}
+.rls-progress-stat {
+    background: var(--rls-surface);
+    padding: 14px 12px;
+    text-align: center;
+}
+.rls-progress-stat-num {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--rls-primary);
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+}
+.rls-progress-stat-label {
+    font-size: 11px;
+    color: var(--rls-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 4px;
+}
+.rls-progress-stat--danger .rls-progress-stat-num {
+    color: var(--rls-danger);
+}
+
+/* === CURRENT FILE === */
+.rls-progress-current {
+    padding: 12px 22px;
+    background: var(--rls-surface-alt);
+    border-bottom: 1px solid var(--rls-border);
+    font-family: var(--rls-mono);
+    font-size: 12px;
+    color: var(--rls-text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.rls-progress-current .dashicons {
+    color: var(--rls-primary);
+    flex-shrink: 0;
+}
+
+/* === CONSOLE === */
+.rls-progress-console-wrap {
+    background: #0f172a;
+    color: #94a3b8;
+    font-family: var(--rls-mono);
+}
+.rls-progress-console-header {
+    background: #1e293b;
+    color: #f1f5f9;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid #334155;
+}
+.rls-progress-console-header .dashicons {
+    color: #38bdf8;
+}
+.rls-progress-console-header strong {
+    flex: 1;
+    font-size: 13px;
+}
+.rls-progress-console-header .button {
+    background: #334155;
+    border-color: #475569;
+    color: #f1f5f9;
+    font-size: 11px;
+    padding: 2px 10px;
+}
+.rls-progress-console-header .button:hover {
+    background: #475569;
+    color: #fff;
+}
+.rls-progress-console {
+    max-height: 240px;
+    min-height: 120px;
+    overflow-y: auto;
+    padding: 8px 0;
+}
+.rls-console-line {
+    padding: 4px 16px;
+    font-size: 12px;
+    line-height: 1.6;
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    border-left: 3px solid transparent;
+    animation: rls-fade-in 0.2s ease-out;
+}
+.rls-console-line:hover {
+    background: rgba(255,255,255,0.04);
+}
+.rls-console-ts {
+    color: #64748b;
+    font-size: 11px;
+    flex-shrink: 0;
+}
+.rls-console-level {
+    color: #60a5fa;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+}
+.rls-console-msg {
+    color: #cbd5e1;
+    word-break: break-word;
+    flex: 1;
+}
+.rls-console-info    { border-left-color: #60a5fa; }
+.rls-console-success { border-left-color: #4ade80; }
+.rls-console-warning { border-left-color: #fbbf24; }
+.rls-console-error   { border-left-color: #f87171; }
+.rls-console-scan    { border-left-color: #a78bfa; }
+.rls-console-info    .rls-console-level { color: #60a5fa; }
+.rls-console-success .rls-console-level { color: #4ade80; }
+.rls-console-warning .rls-console-level { color: #fbbf24; }
+.rls-console-error   .rls-console-level { color: #f87171; }
+.rls-console-scan    .rls-console-level { color: #a78bfa; }
+.rls-console-success .rls-console-msg,
+.rls-console-scan    .rls-console-msg { color: #4ade80; }
+.rls-console-error   .rls-console-msg { color: #fca5a5; }
+.rls-console-warning .rls-console-msg { color: #fde68a; }
+.rls-progress-console::-webkit-scrollbar { width: 8px; height: 8px; }
+.rls-progress-console::-webkit-scrollbar-track { background: #0f172a; }
+.rls-progress-console::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+.rls-progress-console::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+/* === PROGRESS CARD — Variations === */
+.rls-progress-card.is-finished .rls-progress-fill {
+    background: linear-gradient(90deg, #16a34a, #4ade80);
+}
+.rls-progress-card.is-finished .rls-progress-header {
+    background: linear-gradient(135deg, #166534 0%, #16a34a 50%, #22c55e 100%);
+}
+.rls-progress-card.is-error .rls-progress-fill {
+    background: linear-gradient(90deg, #dc2626, #f87171);
+}
+.rls-progress-card.is-error .rls-progress-header {
+    background: linear-gradient(135deg, #7f1d1d 0%, #b91c1c 50%, #dc2626 100%);
+}
+
+/* === QUARANTINE TABLE — High contrast (was invisible) === */
+.rls-quarantine-table {
+    border-radius: var(--rls-radius);
+    overflow: hidden;
+}
+.rls-quarantine-table thead th {
+    background: #1d2327;
+    color: #fff !important;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 11px;
+    padding: 12px 14px;
+    border: none;
+}
+.rls-quarantine-table tbody tr {
+    background: #fff;
+    transition: background 0.12s ease;
+}
+.rls-quarantine-table tbody tr:nth-child(even) {
+    background: #f9fafb;
+}
+.rls-quarantine-table tbody tr:hover {
+    background: #f0f7fc !important;
+}
+.rls-quarantine-table tbody td {
+    padding: 12px 14px;
+    border-bottom: 1px solid #e4e8ef;
+    color: #1d2327 !important;
+}
+.rls-quarantine-table code,
+.rls-quarantine-table code.rls-path,
+.rls-quarantine-table code.rls-name {
+    font-family: var(--rls-mono);
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: #f1f5f9 !important;
+    color: #1e293b !important;
+    display: inline-block;
+    max-width: 100%;
+    word-break: break-all;
+    border: 1px solid #d4d8de;
+}
+.rls-quarantine-table tbody td code {
+    word-break: break-all;
+}
+
+/* === SCANNER PAGE TEXT CONTRAST FIX === */
+.rls-wrap .description {
+    color: var(--rls-text-muted) !important;
+}
+.rls-wrap .nav-tab-wrapper .nav-tab {
+    color: #1d2327 !important;
+}
+.rls-wrap .nav-tab-active {
+    color: var(--rls-primary) !important;
+    border-bottom-color: var(--rls-primary);
+}
+.rls-wrap .nav-tab:hover {
+    background: #f6f7f7;
+    color: var(--rls-primary) !important;
+}
+
+/* === RESULTS TABLE === */
+.rls-scan-table thead th {
+    background: var(--rls-surface-alt);
+    color: var(--rls-text);
+    font-weight: 700;
+    padding: 10px 12px;
+}
+.rls-scan-table tbody tr {
+    transition: background 0.12s ease;
+}
+.rls-scan-table tbody tr:hover {
+    background: var(--rls-surface-hover);
+}
+.rls-scan-table code {
+    font-family: var(--rls-mono);
+    font-size: 12px;
+    background: var(--rls-surface-alt);
+    padding: 3px 8px;
+    border-radius: 4px;
+    color: var(--rls-text) !important;
+    word-break: break-all;
+}
+.rls-scan-table .action-cell button {
+    margin-right: 4px;
+}
+
+/* === DIFF CONTROLS === */
+.rls-diff-controls {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+.rls-diff-controls label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--rls-text);
+}
+.rls-diff-controls select {
+    min-width: 280px;
+    max-width: 320px;
+}
+
+/* === STATUS PILLS for history === */
+.rls-status-pill.is-err {
+    background: #fee2e2 !important;
+    color: #991b1b !important;
+    border: 1px solid #fecaca;
+}
+.rls-status-pill.is-on {
+    background: #dcfce7 !important;
+    color: #166534 !important;
+    border: 1px solid #bbf7d0;
+}
+
+/* === RESPONSIVE === */
+@media (max-width: 782px) {
+    .rls-progress-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .rls-progress-meta {
+        width: 100%;
+        justify-content: space-between;
+    }
+    .rls-progress-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* === GLOBAL CONTRAST FIX v3.0.1 === */
+/* All subtle grays are now properly readable against white backgrounds */
+/* Replace any inline color: #5xxx, #6xxx, #7xxx, #8xxx, #9xxx to use proper contrast */
+.rls-wrap .description,
+.rls-wrap .rls-text-subtle {
+    color: #4b5563 !important;  /* gray-700 instead of #6xxx for AA contrast */
+}
+.rls-wrap .rls-text-light {
+    color: #6b7280 !important;  /* gray-500/600 */
+}
+/* Tailwind-inspired WCAG-AA compliant palette */
+.rls-text-c1 { color: #1d2327 !important; } /* near-black for primary text */
+.rls-text-c2 { color: #4b5563 !important; } /* dark gray for secondary */
+.rls-text-c3 { color: #6b7280 !important; } /* medium gray for hints */
+.rls-bg-c1   { background: #1d2327 !important; color: #fff; }
+.rls-bg-c2   { background: #f3f4f6 !important; }
+.rls-bg-c3   { background: #e5e7eb !important; }
+
+/* Override any #666 / #777 / #888 inline styles */
+.rls-wrap [style*="color:#666"],
+.rls-wrap [style*="color:#777"],
+.rls-wrap [style*="color:#888"],
+.rls-wrap [style*="color:#999"] {
+    color: #4b5563 !important;  /* ensure readable */
+}
+
+/* Forms: better inputs */
+.rls-wrap input[type="text"]:not([style*="color"]),
+.rls-wrap input[type="email"]:not([style*="color"]),
+.rls-wrap input[type="url"]:not([style*="color"]),
+.rls-wrap textarea:not([style*="color"]),
+.rls-wrap select:not([style*="color"]) {
+    color: #1d2327 !important;
+    background: #fff;
+}
+.rls-wrap input::placeholder { color: #9ca3af; }
+
+/* Tables: ensure all TD content is readable */
+.rls-wrap .wp-list-table tbody td {
+    color: #1d2327;
+}
+.rls-wrap .wp-list-table tbody td code {
+    color: #1e293b;
+    background: #f3f4f6;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: var(--rls-mono);
+    font-size: 12px;
+}
+.rls-wrap .wp-list-table tbody td small {
+    color: #4b5563;
+}
+
+/* Settings page sidebar inside modes grid */
+.rls-mode-grid .rls-mode-card .rls-mode-card-text {
+    color: #4b5563 !important;
+}
+.rls-mode-grid .rls-mode-card .rls-mode-card-title {
+    color: #1d2327 !important;
+    font-weight: 600;
+}
+
+/* Generic .button-primary always visible */
+.rls-wrap .button-primary {
+    background: var(--rls-primary);
+    color: #fff;
+    border-color: var(--rls-primary-hover);
+}
+.rls-wrap .button-primary:hover {
+    background: var(--rls-primary-hover);
+    color: #fff;
+}
+
+/* === v3.0.2: UNIFIED DESIGN SYSTEM ============================== */
+/* This section enforces consistent layout across ALL admin pages. */
+
+/* ─── Standard page header ─── */
+.rls-page-heading {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    margin: 14px 0 20px !important;
+    padding: 0 !important;
+    color: var(--rls-text) !important;
+    font-size: 23px !important;
+    font-weight: 600 !important;
+    line-height: 1.3 !important;
+}
+.rls-page-heading .dashicons {
+    font-size: 28px;
+    width: 28px;
+    height: 28px;
+    color: var(--rls-primary);
+}
+.rls-page-heading .rls-page-version {
+    margin-left: 6px;
+    padding: 3px 12px;
+    border-radius: 999px;
+    background: var(--rls-surface-alt);
+    color: var(--rls-text-muted);
+    font-size: 11px;
+    font-weight: 500;
+    vertical-align: middle;
+}
+.rls-page-heading .rls-mode-badge {
+    margin-left: auto;
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: var(--rls-success-bg);
+    color: var(--rls-success);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+/* ─── Hero section (used by several pages) ─── */
+.rls-page-hero {
+    background: linear-gradient(135deg, #1d3a8a 0%, #1e40af 50%, #0e7490 100%);
+    background-size: 200% 200%;
+    animation: rls-gradient-shift 12s ease infinite;
+    color: #fff;
+    border-radius: var(--rls-radius-lg);
+    padding: 24px 32px;
+    margin: 14px 0 22px;
+    box-shadow: var(--rls-shadow);
+    position: relative;
+    overflow: hidden;
+    animation: rls-fade-in-down 0.5s ease-out;
+}
+.rls-page-hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(1200px 400px at 100% 0%, rgba(255,255,255,0.10) 0%, transparent 60%);
+    pointer-events: none;
+}
+.rls-page-hero-top {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+.rls-page-kicker {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    opacity: 0.75;
+    margin-bottom: 6px;
+    font-weight: 600;
+}
+.rls-page-title {
+    margin: 0 0 8px;
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.rls-page-title .rls-page-version {
+    margin-left: 6px;
+    padding: 3px 12px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.16);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 500;
+    backdrop-filter: blur(6px);
+}
+.rls-page-subtitle {
+    margin: 0;
+    color: rgba(255,255,255,0.82);
+    font-size: 14px;
+    line-height: 1.5;
+    max-width: 70ch;
+}
+.rls-hero-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+.rls-hero-actions .rls-status-pill {
+    background: rgba(255,255,255,0.16);
+    backdrop-filter: blur(6px);
+    color: #fff !important;
+    border: 1px solid rgba(255,255,255,0.24);
+}
+
+/* ─── Standard Box (uniform container) ─── */
+.rls-box, .rls-wrap .rls-box {
+    background: var(--rls-surface);
+    border: 1px solid var(--rls-border);
+    border-radius: var(--rls-radius);
+    padding: 22px 24px;
+    margin: 0 0 18px;
+    box-shadow: var(--rls-shadow-sm);
+    transition: box-shadow var(--rls-trans), border-color var(--rls-trans);
+    animation: rls-fade-in-up 0.4s ease-out both;
+}
+.rls-box:hover {
+    box-shadow: var(--rls-shadow);
+}
+.rls-box h2 {
+    margin: 0 0 12px;
+    padding: 0 0 10px;
+    border-bottom: 1px solid var(--rls-border);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--rls-text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-left: 3px solid transparent;
+    padding-left: 12px;
+    margin-left: -12px;
+}
+.rls-box h2 .dashicons {
+    color: var(--rls-primary);
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+}
+.rls-box h3 {
+    margin: 18px 0 10px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--rls-text);
+}
+.rls-box p {
+    color: var(--rls-text-muted);
+    margin: 0 0 14px;
+    font-size: 13.5px;
+    line-height: 1.6;
+}
+
+/* ─── Table styling (all tables consistent) ─── */
+.rls-wrap .wp-list-table {
+    border: 1px solid var(--rls-border);
+    border-radius: var(--rls-radius);
+    overflow: hidden;
+    background: var(--rls-surface);
+}
+.rls-wrap .wp-list-table thead th,
+.rls-wrap .wp-list-table tfoot th {
+    background: var(--rls-surface-alt);
+    color: var(--rls-text) !important;
+    font-weight: 700;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 12px 14px;
+    border-bottom: 2px solid var(--rls-border-strong);
+}
+.rls-wrap .wp-list-table tbody td {
+    padding: 10px 14px;
+    color: var(--rls-text);
+    border-bottom: 1px solid var(--rls-border);
+    font-size: 13px;
+}
+.rls-wrap .wp-list-table tbody tr {
+    transition: background var(--rls-trans-fast);
+}
+.rls-wrap .wp-list-table tbody tr:hover {
+    background: var(--rls-surface-hover);
+}
+.rls-wrap .wp-list-table tbody tr:last-child td {
+    border-bottom: none;
+}
+.rls-wrap .wp-list-table tbody td code,
+.rls-wrap .wp-list-table thead th code {
+    background: #f1f5f9;
+    color: #1e293b;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: var(--rls-mono);
+    font-size: 11.5px;
+}
+
+/* ─── Form fields (uniform look) ─── */
+.rls-wrap input[type="text"],
+.rls-wrap input[type="email"],
+.rls-wrap input[type="url"],
+.rls-wrap input[type="number"],
+.rls-wrap input[type="password"],
+.rls-wrap select,
+.rls-wrap textarea {
+    border-radius: var(--rls-radius-sm);
+    border: 1px solid var(--rls-border);
+    background: #fff;
+    color: var(--rls-text) !important;
+    padding: 6px 10px;
+    transition: border-color var(--rls-trans-fast), box-shadow var(--rls-trans-fast);
+}
+.rls-wrap input[type="text"]:focus,
+.rls-wrap input[type="email"]:focus,
+.rls-wrap input[type="url"]:focus,
+.rls-wrap input[type="number"]:focus,
+.rls-wrap input[type="password"]:focus,
+.rls-wrap select:focus,
+.rls-wrap textarea:focus {
+    border-color: var(--rls-primary);
+    box-shadow: 0 0 0 3px rgba(34, 113, 177, 0.15);
+    outline: none;
+}
+
+/* ─── Tabs (standardized nav-tab-wrapper) ─── */
+.rls-wrap .nav-tab-wrapper {
+    border-bottom: 1px solid var(--rls-border);
+    padding: 0;
+    margin: 0 0 20px;
+}
+.rls-wrap .nav-tab {
+    padding: 10px 16px !important;
+    color: var(--rls-text) !important;
+    font-weight: 500;
+    border: none !important;
+    border-bottom: 3px solid transparent !important;
+    transition: all var(--rls-trans-fast);
+    background: transparent !important;
+}
+.rls-wrap .nav-tab:hover {
+    color: var(--rls-primary) !important;
+    background: rgba(34, 113, 177, 0.05) !important;
+}
+.rls-wrap .nav-tab-active,
+.rls-wrap .nav-tab-active:focus,
+.rls-wrap .nav-tab-active:focus-within {
+    color: var(--rls-primary) !important;
+    border-bottom-color: var(--rls-primary) !important;
+    background: transparent !important;
+}
+
+/* ─── Form-table ─── */
+.rls-wrap .form-table th {
+    color: var(--rls-text) !important;
+    font-weight: 600;
+    padding: 16px 10px 16px 0;
+}
+.rls-wrap .form-table td {
+    padding: 12px 10px;
+    color: var(--rls-text) !important;
+}
+.rls-wrap .form-table .description {
+    color: var(--rls-text-muted) !important;
+    font-size: 12.5px;
+    line-height: 1.5;
+}
+
+/* ─── Status Pills (uniform look across the plugin) ─── */
+.rls-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1.5;
+}
+.rls-status-pill.is-on {
+    background: var(--rls-success-bg);
+    color: var(--rls-success);
+    border: 1px solid rgba(22, 163, 74, 0.18);
+}
+.rls-status-pill.is-warn {
+    background: var(--rls-warning-bg);
+    color: var(--rls-warning);
+    border: 1px solid rgba(217, 119, 6, 0.18);
+}
+.rls-status-pill.is-err {
+    background: var(--rls-danger-bg);
+    color: var(--rls-danger);
+    border: 1px solid rgba(220, 38, 38, 0.18);
+}
+.rls-status-pill.is-off {
+    background: var(--rls-surface-alt);
+    color: var(--rls-text-muted);
+    border: 1px solid var(--rls-border);
+}
+.rls-status-pill::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+    opacity: 0.7;
+}
+.rls-status-pill.is-on::before {
+    animation: rls-pulse-dot 2s ease-in-out infinite;
+}
+
+/* ─── Attack Types reference page ─── */
+.rls-attack-types-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    gap: 14px;
+}
+.rls-attack-type-card {
+    background: var(--rls-surface);
+    border: 1px solid var(--rls-border);
+    border-left-width: 4px;
+    border-radius: var(--rls-radius);
+    padding: 16px 18px;
+    transition: all var(--rls-trans);
+    animation: rls-fade-in-up 0.4s ease-out both;
+}
+.rls-attack-type-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--rls-shadow);
+    border-color: var(--rls-border-strong);
+}
+.rls-attack-type-card__header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+.rls-attack-type-card__icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: #fff;
+}
+.rls-attack-type-card__icon .dashicons {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+}
+.rls-attack-type-card__name {
+    display: block;
+    color: var(--rls-text);
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+.rls-attack-type-card__name-en {
+    display: block;
+    color: var(--rls-text-subtle);
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-top: 2px;
+}
+.rls-attack-type-card__short {
+    margin: 8px 0;
+    color: var(--rls-text);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.4;
+}
+.rls-attack-type-card__description {
+    margin: 0 0 12px;
+    color: var(--rls-text-muted);
+    font-size: 12.5px;
+    line-height: 1.55;
+}
+.rls-attack-type-card__meta {
+    background: var(--rls-surface-alt);
+    border-radius: var(--rls-radius-sm);
+    padding: 10px 12px;
+    font-size: 11.5px;
+}
+.rls-attack-type-card__meta-item {
+    margin-bottom: 6px;
+    line-height: 1.4;
+}
+.rls-attack-type-card__meta-item:last-child {
+    margin-bottom: 0;
+}
+.rls-attack-type-card__meta-item strong {
+    color: var(--rls-text);
+    display: inline-block;
+    min-width: 60px;
+    font-size: 11.5px;
+}
+.rls-attack-type-card__meta-item code {
+    font-family: var(--rls-mono);
+    font-size: 11px;
+    background: #fff !important;
+    color: #1e293b !important;
+    padding: 2px 6px !important;
+    border-radius: 3px;
+    border: 1px solid var(--rls-border);
+}
+.rls-attack-type-card__meta-response strong {
+    color: var(--rls-danger);
+}
+
+/* ─── Misc: Loading states ─── */
+.rls-wrap .button[disabled],
+.rls-wrap .button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* ─── Misc: Light hover for cards ─── */
+.rls-wrap .rls-box .button {
+    transition: transform var(--rls-trans-fast), box-shadow var(--rls-trans-fast), background var(--rls-trans-fast);
+}
+.rls-wrap .rls-box .button:not([disabled]):hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .rls-wrap *, .rls-wrap *::before, .rls-wrap *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+@media (max-width: 782px) {
+    .rls-page-hero { padding: 18px 20px; }
+    .rls-page-title { font-size: 20px; }
+    .rls-box { padding: 16px 18px; }
+    .rls-attack-types-grid { grid-template-columns: 1fr; }
+}

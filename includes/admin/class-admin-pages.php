@@ -274,6 +274,14 @@ class RLS_Admin_Pages {
         );
         add_submenu_page(
             'rls-scanner',
+            'Типы атак',
+            'Типы атак',
+            'manage_options',
+            'rls-attack-types',
+            [ $this, 'render_attack_types_page' ]
+        );
+        add_submenu_page(
+            'rls-scanner',
             'Отчёты',
             'Отчёты',
             'manage_options',
@@ -563,6 +571,10 @@ class RLS_Admin_Pages {
 
     public function render_webhooks_page() {
         require_once RLS_PLUGIN_PATH . 'includes/admin/views/webhooks-page.php';
+    }
+
+    public function render_attack_types_page() {
+        require_once RLS_PLUGIN_PATH . 'includes/admin/views/attack-types-page.php';
     }
 
     /**

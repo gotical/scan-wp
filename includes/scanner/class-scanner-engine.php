@@ -197,16 +197,18 @@ class RLS_Scanner_Engine {
     public function ajax_perform_scan_step() {
         check_ajax_referer( 'rls_scanner_nonce', 'nonce' );
         if (function_exists('set_time_limit')) @set_time_limit(60);
-        
+
         $offset = isset( $_POST['offset'] ) ? intval( $_POST['offset'] ) : 0;
         $file_list = get_transient( 'rls_scan_file_list' );
         $max_file_size = $this->get_scan_file_size_limit();
-        
+
         if ( $file_list === false ) wp_send_json_error( 'Session expired' );
 
         $total_files = count($file_list);
         $processed = 0;
         $found_threats = [];
+        $skipped = 0;
+        $last_file = '';
         $start_time = microtime(true);
 
         while ( ($offset + $processed) < $total_files ) {
@@ -214,13 +216,29 @@ class RLS_Scanner_Engine {
 
             $idx = $offset + $processed;
             if ( isset($file_list[$idx]) ) {
-            $threats = $this->scan_single_file( $file_list[$idx] );
-            if ( ! empty($threats) ) $found_threats = array_merge( $found_threats, $threats );
-        }
+                $fp = $file_list[$idx];
+                $size = @filesize( $fp );
+                if ( $size !== false && $size > $max_file_size ) {
+                    $skipped++;
+                    $processed++;
+                    continue;
+                }
+                $threats = $this->scan_single_file_enhanced( $fp, true );
+                if ( ! empty($threats) ) {
+                    $found_threats = array_merge( $found_threats, $threats );
+                }
+                $last_file = $fp;
+            }
             $processed++;
         }
-        
-        wp_send_json_success( [ 'found_threats' => $found_threats, 'scanned_count' => $processed ] );
+
+        wp_send_json_success( [
+            'found_threats'  => $found_threats,
+            'scanned_count'  => $processed,
+            'skipped'        => $skipped,
+            'last_file'      => $last_file,
+            'progress_total' => $total_files,
+        ] );
     }
 
     // --- ЯДРО СКАНИРОВАНИЯ ---

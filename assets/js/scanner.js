@@ -5,17 +5,25 @@
 
 jQuery(function($) {
     
-    // Элементы UI
+// Элементы UI
     const startScanBtn        = $('#rls-start-scan-button');
     const fullScanBtn         = $('#rls-start-full-scan-button');
     const createSnapshotBtn   = $('#rls-create-snapshot-button');
     const compareSnapshotBtn  = $('#rls-compare-snapshot-button');
-    const progressBarArea     = $('.rls-scan-progress-area');
-    const progressBar         = $('#rls-scan-progress-bar');
+    const progressBarArea     = $('#rls-scan-progress-area');
+    const progressFill        = $('#rls-scan-progress-fill');
+    const progressStatTotal   = $('#rls-scan-stat-total');
+    const progressStatScanned = $('#rls-scan-stat-scanned');
+    const progressStatSkipped = $('#rls-scan-stat-skipped');
+    const progressStatThreats = $('#rls-scan-stat-threats');
+    const progressEta         = $('#rls-scan-eta');
+    const progressCurrent     = $('#rls-scan-current-file');
+    const progressPctEl       = $('#rls-scan-progress-pct');
     const statusText          = $('#rls-scan-status');
     const statusTitle         = $('#rls-scan-status-title');
     const resultsContainer    = $('#rls-results-content');
     const spinner             = $('.rls-scan-progress-area .spinner');
+    const consoleEl           = $('#rls-scan-console');
 
     // Переменные состояния
     let totalFiles = 0;
@@ -24,9 +32,10 @@ jQuery(function($) {
     let snapshotData = {}; 
     let comparisonChanges = { added: [], modified: [], deleted: [] };
     
-    let isWorking = false; 
-    let currentProcess = null; 
+let isWorking = false;
+    let currentProcess = null;
     let currentScanMode = 'important';
+    let scanStartedAt = 0;
     let retryCount = 0;
 
     // --- TABS (Вкладки) ---
@@ -74,7 +83,8 @@ jQuery(function($) {
     // --- ЛОГИКА ПРОЦЕССА ---
 
     function startProcess() { 
-        isWorking = true; 
+        isWorking = true;
+        scanStartedAt = Date.now();
         retryCount = 0;
         updateUI('discovery_start'); 
         
@@ -127,25 +137,38 @@ jQuery(function($) {
     function nextStep() {
         if (!isWorking) return;
         if (processedFiles >= totalFiles) { finalizeProcess(); return; }
-        
+
         let action = '';
         if(currentProcess === 'malware') action = 'rls_perform_scan_step';
         else if(currentProcess === 'snapshot') action = 'rls_create_snapshot_step';
         else action = 'rls_compare_snapshot_step';
 
         ajaxCall(action, { offset: processedFiles }, function(res) {
-            if (res.success) { 
+            if (res.success) {
                 // Обновляем прогресс
                 let count = res.data.processed_count || res.data.scanned_count || 0;
-                
-                // Защита от бесконечного цикла, если сервер вернул 0 (но файлы еще есть)
                 if (count === 0) count = 1;
-                
-                processedFiles += count; 
-                
+                processedFiles += count;
+
+                // Сколько пропущено (большие файлы).
+                if (res.data.skipped) {
+                    cumulativeSkipped = (cumulativeSkipped || 0) + res.data.skipped;
+                }
+
+                // Текущий файл — для консоли.
+                if (res.data.last_file) {
+                    currentScanningFile = res.data.last_file;
+                }
+
                 // Собираем данные
                 if(currentProcess==='malware' && res.data.found_threats) {
                     foundThreats = foundThreats.concat(res.data.found_threats);
+                    if (res.data.found_threats.length > 0) {
+                        res.data.found_threats.forEach(t => {
+                            const name = (t.file || '').split('/').pop();
+                            logConsole('⚠ Угроза', name + ': ' + (t.rule_name || t.signature || '?'), 'warning');
+                        });
+                    }
                 }
                 if(currentProcess==='snapshot' && res.data.snapshot_part) {
                     $.extend(snapshotData, res.data.snapshot_part);
@@ -154,12 +177,12 @@ jQuery(function($) {
                     if(res.data.changes.added) comparisonChanges.added = comparisonChanges.added.concat(res.data.changes.added);
                     if(res.data.changes.modified) comparisonChanges.modified = comparisonChanges.modified.concat(res.data.changes.modified);
                 }
-                
-                updateUI('working'); 
-                
+
+                updateUI('working');
+
                 // Следующий шаг
-                setTimeout(nextStep, 50); 
-            } else { 
+                setTimeout(nextStep, 50);
+            } else {
                 updateUI('error', res.data); 
             } 
         });
@@ -260,75 +283,133 @@ jQuery(function($) {
         spinner.css('visibility', 'visible'); 
         
         switch(state) { 
-            case 'discovery_start': 
-                progressBar.css('width', '0%').text(''); 
+case 'discovery_start':
+                progressFill.css('width', '0%');
+                if (progressPctEl) progressPctEl.text('0%');
+                if (progressStatTotal) progressStatTotal.text('0');
+                if (progressStatScanned) progressStatScanned.text('0');
+                if (progressStatSkipped) progressStatSkipped.text('0');
+                if (progressStatThreats) progressStatThreats.text('0');
+                if (progressEta) progressEta.text('--:--');
+                if (progressCurrent) progressCurrent.text('Ожидание…');
+                clearConsole();
                 statusTitle.text(currentProcess === 'malware' && currentScanMode === 'full' ? 'Полное сканирование...' : 'Индексация файлов...');
-                statusText.text('Подготовка...'); 
-                resultsContainer.html('<div class="rls-empty-state" style="text-align:center; padding:40px 20px; color:#a0a5aa;"><span class="spinner is-active" style="float:none;"></span><p>Составляем список файлов...</p></div>'); 
-                break; 
-            
-            case 'discovering': 
+                statusText.text('Подготовка...');
+                resultsContainer.html('<div class="rls-empty-state" style="text-align:center; padding:40px 20px; color:#a0a5aa;"><span class="spinner is-active" style="float:none;"></span><p>Составляем список файлов...</p></div>');
+                break;
+
+            case 'discovering':
                 let est = data.files_found + (data.dirs_left * 10);
                 // Показываем до 15% прогресса на этапе поиска
-                let pct = Math.min(15, Math.round((data.files_found / (est || 1)) * 15)); 
-                progressBar.css('width', pct + '%').text(''); 
-                statusText.text(`Найдено: ${data.files_found} файлов`); 
-                break; 
-            
-            case 'working': 
+                let pct = Math.min(15, Math.round((data.files_found / (est || 1)) * 15));
+                progressFill.css('width', pct + '%');
+                if (progressPctEl) progressPctEl.text(pct + '%');
+                statusText.text(`Найдено: ${data.files_found} файлов`);
+                logConsole('Индексация', 'Найдено файлов: ' + data.files_found);
+                break;
+
+            case 'working':
                 // Прогресс от 15% до 99%
                 let wpct = 0;
                 if (totalFiles > 0) {
-                    wpct = 15 + Math.round((processedFiles / totalFiles) * 85);
+                    wpct = 15 + Math.round((processedFiles / totalFiles) * 84);
                 } else {
-                    wpct = 100;
+                    wpct = 99;
                 }
-                wpct = Math.min(99, wpct); // Не показываем 100%, пока не финализируем
-                
-                progressBar.css('width', wpct + '%').text(wpct + '%'); 
-                
+                wpct = Math.min(99, Math.max(15, wpct));
+
+                progressFill.css('width', wpct + '%');
+                if (progressPctEl) progressPctEl.text(wpct + '%');
+
                 let actionName = 'Обработка';
                 if (currentProcess === 'malware') actionName = (currentScanMode === 'full') ? 'Полное сканирование' : 'Поиск вирусов';
                 if (currentProcess === 'snapshot') actionName = 'Создание снимка';
                 if (currentProcess === 'compare') actionName = 'Сравнение';
-                
+
                 statusTitle.text(actionName + '...');
-                statusText.text(`${processedFiles} / ${totalFiles}`); 
-                break; 
-            
-            case 'finish': 
-                isWorking = false; 
-                $('.rls-scan-controls button').prop('disabled', false); 
-                
+                statusText.text(`${processedFiles} / ${totalFiles}`);
+
+                if (progressStatTotal) progressStatTotal.text(totalFiles);
+                if (progressStatScanned) progressStatScanned.text(processedFiles);
+                if (progressStatSkipped) progressStatSkipped.text(data.skipped || 0);
+                if (progressStatThreats) progressStatThreats.text(foundThreats.length);
+
+                // Console log with rate limiting (every ~5%).
+                if (consoleEl && consoleEl.length && (processedFiles % 25 === 0 || processedFiles === totalFiles)) {
+                    const lastFile = (data.last_file || '').replace(/\/var\/www\/html\/wp-content\//, '.../');
+                    const logType = foundThreats.length > 0 ? 'warning' : 'info';
+                    logConsole(
+                        actionName,
+                        'Проверено ' + processedFiles + ' / ' + totalFiles +
+                        (lastFile ? ' · ' + lastFile : ''),
+                        logType
+                    );
+                }
+
+                // ETA.
+                if (progressEta && processedFiles > 0) {
+                    const elapsed = (Date.now() - scanStartedAt) / 1000;
+                    const perFile = elapsed / processedFiles;
+                    const remaining = Math.max(0, totalFiles - processedFiles);
+                    const etaSec = Math.round(perFile * remaining);
+                    const mm = Math.floor(etaSec / 60);
+                    const ss = etaSec % 60;
+                    progressEta.text(mm + ':' + String(ss).padStart(2, '0'));
+                }
+                break;
+
+            case 'finish':
+                isWorking = false;
+                $('.rls-scan-controls button').prop('disabled', false);
+
                 if (currentProcess === 'snapshot') {
                     rls_scanner_data.snapshot_exists = true;
                 }
-                compareSnapshotBtn.prop('disabled', !rls_scanner_data.snapshot_exists); 
-                
-                spinner.css('visibility', 'hidden'); 
-                progressBar.css('width', '100%').text('100%'); 
+                compareSnapshotBtn.prop('disabled', !rls_scanner_data.snapshot_exists);
+
+                spinner.css('visibility', 'hidden');
+                progressFill.css('width', '100%');
+                if (progressPctEl) progressPctEl.text('100%');
                 statusTitle.text('Завершено успешно');
-                statusText.text('Готово'); 
-                
-                displayResults(data); 
-                break; 
-            
-            case 'error': 
-                isWorking = false; 
-                $('.rls-scan-controls button').prop('disabled', false); 
-                compareSnapshotBtn.prop('disabled', !rls_scanner_data.snapshot_exists); 
-                
-                spinner.css('visibility', 'hidden'); 
-                progressBar.css('background-color', '#d63638');
-                statusTitle.html(`<span style="color:#d63638;">Ошибка!</span>`); 
+                statusText.text('Готово');
+                logConsole('Готово', 'Сканирование завершено успешно');
+
+                displayResults(data);
+                break;
+
+            case 'error':
+                isWorking = false;
+                $('.rls-scan-controls button').prop('disabled', false);
+                compareSnapshotBtn.prop('disabled', !rls_scanner_data.snapshot_exists);
+
+                spinner.css('visibility', 'hidden');
+                progressFill.css('background', '#dc2626');
+                statusTitle.html('<span style="color:#dc2626;">⚠ Ошибка!</span>');
                 statusText.text('Остановлено');
-                resultsContainer.html(`<div class="rls-alert-danger" style="padding:10px; background:#fbeaea; border-left:4px solid #dc3545; color:#d63638;"><p><strong>Произошла ошибка:</strong> ${data}</p><p>Попробуйте обновить страницу и запустить снова.</p></div>`);
-                break; 
+                logConsole('Ошибка', data, 'error');
+                resultsContainer.html('<div class="rls-notice is-danger" style="margin-top:14px;"><p><strong>Произошла ошибка:</strong> ' + data + '</p><p>Попробуйте обновить страницу и запустить снова.</p></div>');
+                break;
         } 
     }
 
+    function logConsole( level, message, type ) {
+        if ( ! consoleEl || ! consoleEl.length ) return;
+        type = type || 'info';
+        const ts = new Date().toLocaleTimeString();
+        const li = $('<div class="rls-console-line rls-console-' + type + '">' +
+            '<span class="rls-console-ts">[' + ts + ']</span>' +
+            '<span class="rls-console-level">' + level + '</span>' +
+            '<span class="rls-console-msg">' + esc(message) + '</span>' +
+        '</div>');
+        consoleEl.append(li);
+        consoleEl.scrollTop( consoleEl[0].scrollHeight );
+    }
+
+    function clearConsole() {
+        if ( consoleEl && consoleEl.length ) consoleEl.empty();
+    }
+
     function displayResults(msg) {
-        let html = '';
         
         if (currentProcess === 'malware') {
             if (foundThreats.length === 0) { 
