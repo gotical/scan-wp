@@ -12,6 +12,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 class RLS_Scanner_Engine {
 
     const TIME_LIMIT = 25; // seconds per AJAX step
+const BATCH_SIZE = 5;   // tiny batches to never time out
+const MAX_FILES = 1500; // hard cap to prevent memory issues
     const MAX_FILE_SIZE = 2097152; // 2MB
 
     // Очищенные паттерны Regex (Без ложных срабатываний)
@@ -200,11 +202,10 @@ class RLS_Scanner_Engine {
         
         $start_time = microtime(true);
         $dirs_processed = 0;
-        $max_files = 3000; // Hard cap to prevent timeouts/memory issues.
 
         while ( ! empty( $dirs ) ) {
             if ( (microtime(true) - $start_time) > self::TIME_LIMIT ) break;
-            if ( count( $files ) >= $max_files ) break;
+            if ( count( $files ) >= self::MAX_FILES ) break;
 
             $current_dir = array_shift( $dirs );
             $dirs_processed++;
@@ -223,7 +224,7 @@ class RLS_Scanner_Engine {
                     if ( is_dir( $path ) && ! is_link( $path ) ) {
                         $dirs[] = $path;
                     } elseif ( is_file( $path ) ) {
-                        if ( count( $files ) >= $max_files ) break;
+                        if ( count( $files ) >= self::MAX_FILES ) break;
                         if ( $this->should_include_discovered_file( $path, $item, $mode ) ) {
                             $files[] = $path;
                         }
@@ -260,7 +261,7 @@ class RLS_Scanner_Engine {
         }
 
         // Limit batch size to prevent memory issues.
-        $batch_limit = 25;
+        $batch_limit = self::BATCH_SIZE;
         $total_files = count($file_list);
         $processed = 0;
         $found_threats = [];

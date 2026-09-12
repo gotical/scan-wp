@@ -402,7 +402,14 @@ class RLS_Admin_Pages {
     
     // пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     public function render_scanner_page() {
-        require_once RLS_PLUGIN_PATH . 'includes/admin/views/scanner-page.php'; 
+        $this->render_page_heading(
+            'Сканер безопасности',
+            'dashicons-shield-alt',
+            'Поиск вредоносного кода, снимки файловой системы, карантин.',
+            [ 'mode' => true ]
+        );
+        require_once RLS_PLUGIN_PATH . 'includes/admin/views/scanner-page.php';
+        echo '</div><!-- .rls-wrap -->';
     }
 
     private function render_settings_section_page( $section, $tab = '' ) {

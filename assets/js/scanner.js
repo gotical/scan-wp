@@ -594,6 +594,15 @@ case 'discovery_start':
         });
     });
 
+    // Console clear button.
+    $(document).on('click', '.rls-console-clear', function(e) {
+        e.preventDefault();
+        if (consoleEl && consoleEl.length) {
+            consoleEl.empty();
+            logConsole('Очищено', 'Журнал очищен пользователем');
+        }
+    });
+
     $('.rls-delete-q-btn').click(function() {
         if(!confirm('Удалить файл безвозвратно?')) return;
         var btn = $(this);

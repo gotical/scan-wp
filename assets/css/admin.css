@@ -3973,3 +3973,304 @@ body.rls-tooltip-lock {
     font-weight: 500;
     vertical-align: middle;
 }
+
+/* === v3.1.0 — FINAL DESIGN POLISH === */
+
+/* Ensure consistent typography everywhere */
+.rls-wrap {
+    font-family: var(--rls-font) !important;
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--rls-text);
+}
+
+/* Standardize H1 page headings */
+.rls-wrap .wrap > h1.rls-page-heading,
+.rls-wrap > .wrap > h1.rls-page-heading {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    font-size: 23px !important;
+    font-weight: 600 !important;
+    margin: 14px 0 18px !important;
+    padding: 0 !important;
+    color: var(--rls-text) !important;
+}
+
+/* Standardize H2 inside boxes */
+.rls-box > h2:first-child,
+.rls-box > h2 {
+    margin: 0 0 14px;
+    padding: 0 0 10px;
+    border-bottom: 1px solid var(--rls-border);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--rls-text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.rls-box > h2 > .dashicons,
+.rls-box > h2 .dashicons {
+    color: var(--rls-primary);
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+}
+
+/* Standardize all .rls-box */
+.rls-wrap .rls-box {
+    background: var(--rls-surface);
+    border: 1px solid var(--rls-border);
+    border-radius: var(--rls-radius);
+    padding: 22px 24px;
+    margin: 0 0 18px;
+    box-shadow: var(--rls-shadow-sm);
+    transition: box-shadow 0.22s, border-color 0.22s;
+}
+.rls-wrap .rls-box:hover {
+    box-shadow: var(--rls-shadow);
+}
+
+/* Consistent tables */
+.rls-wrap .wp-list-table {
+    border: 1px solid var(--rls-border) !important;
+    border-radius: var(--rls-radius) !important;
+    overflow: hidden;
+    background: var(--rls-surface);
+}
+.rls-wrap .wp-list-table thead th {
+    background: var(--rls-surface-alt) !important;
+    color: var(--rls-text) !important;
+    font-weight: 700;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 12px 14px !important;
+    border-bottom: 2px solid var(--rls-border-strong) !important;
+}
+.rls-wrap .wp-list-table tbody td {
+    padding: 10px 14px !important;
+    color: var(--rls-text) !important;
+    border-bottom: 1px solid var(--rls-border);
+    font-size: 13px;
+}
+.rls-wrap .wp-list-table tbody tr {
+    transition: background 0.12s ease;
+}
+.rls-wrap .wp-list-table tbody tr:hover {
+    background: var(--rls-surface-hover) !important;
+}
+.rls-wrap .wp-list-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+.rls-wrap .wp-list-table code {
+    background: #f1f5f9 !important;
+    color: #1e293b !important;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: var(--rls-mono);
+    font-size: 11.5px;
+}
+
+/* Standardize status pills */
+.rls-wrap .rls-status-pill {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px !important;
+    border-radius: 999px;
+    font-size: 11px !important;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1.5;
+}
+.rls-wrap .rls-status-pill.is-on  { background: var(--rls-success-bg); color: var(--rls-success); }
+.rls-wrap .rls-status-pill.is-warn{ background: var(--rls-warning-bg); color: var(--rls-warning); }
+.rls-wrap .rls-status-pill.is-err { background: var(--rls-danger-bg);  color: var(--rls-danger); }
+.rls-wrap .rls-status-pill.is-off { background: var(--rls-surface-alt); color: var(--rls-text-muted); }
+.rls-wrap .rls-status-pill::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+    opacity: 0.7;
+}
+.rls-wrap .rls-status-pill.is-on::before {
+    animation: rls-pulse-dot 2s ease-in-out infinite;
+}
+
+/* Standardize toggles */
+.rls-wrap .rls-toggle {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+    vertical-align: middle;
+}
+.rls-wrap .rls-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.rls-wrap .rls-toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background: var(--rls-border-strong);
+    border-radius: 24px;
+    transition: 0.2s;
+}
+.rls-wrap .rls-toggle-slider::before {
+    content: "";
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    left: 3px;
+    top: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.rls-wrap .rls-toggle input:checked + .rls-toggle-slider { background: var(--rls-success); }
+.rls-wrap .rls-toggle input:checked + .rls-toggle-slider::before { transform: translateX(20px); }
+
+/* Standardize mode cards */
+.rls-wrap .rls-mode-card {
+    display: block;
+    padding: 16px;
+    border: 1px solid var(--rls-border);
+    border-radius: var(--rls-radius);
+    background: var(--rls-surface);
+    transition: all 0.22s;
+    position: relative;
+    overflow: hidden;
+}
+.rls-wrap .rls-mode-card:hover {
+    border-color: var(--rls-primary);
+    box-shadow: var(--rls-shadow-sm);
+}
+.rls-wrap .rls-mode-card:has(input:checked) {
+    border-color: var(--rls-primary);
+    background: #f0f7fc;
+    box-shadow: 0 0 0 2px rgba(34,113,177,0.12);
+}
+.rls-wrap .rls-mode-card-title {
+    display: block;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--rls-text);
+}
+.rls-wrap .rls-mode-card-text {
+    display: block;
+    color: var(--rls-text-muted);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+/* Standardize form-table */
+.rls-wrap .form-table th {
+    width: 200px;
+    color: var(--rls-text) !important;
+    font-weight: 600;
+    padding: 16px 10px 16px 0 !important;
+}
+.rls-wrap .form-table td {
+    padding: 12px 10px !important;
+    color: var(--rls-text) !important;
+}
+.rls-wrap .form-table .description {
+    color: var(--rls-text-muted) !important;
+    font-size: 12.5px;
+    line-height: 1.5;
+}
+
+/* Consistent button styles */
+.rls-wrap .button.button-primary {
+    background: var(--rls-primary);
+    color: #fff;
+    border-color: var(--rls-primary-hover);
+}
+.rls-wrap .button.button-primary:hover {
+    background: var(--rls-primary-hover);
+    color: #fff;
+}
+
+/* Ensure consistent widget grid */
+.rls-wrap .rls-widget-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin: 12px 0;
+}
+.rls-wrap .rls-widget-tile {
+    text-align: center;
+    padding: 14px 8px;
+    border-radius: var(--rls-radius);
+    background: var(--rls-surface-alt);
+    border: 1px solid var(--rls-border);
+    transition: all 0.22s;
+}
+.rls-wrap .rls-widget-tile:hover {
+    box-shadow: var(--rls-shadow);
+    background: var(--rls-surface);
+}
+
+/* Subtitle block */
+.rls-page-subtitle-block {
+    margin: -8px 0 18px;
+    color: var(--rls-text-muted);
+    font-size: 14px;
+    line-height: 1.5;
+    max-width: 80ch;
+}
+
+/* Page hero gradient consistency */
+.rls-page-hero {
+    background: linear-gradient(135deg, #1d3a8a 0%, #1e40af 50%, #0e7490 100%) !important;
+    background-size: 200% 200%;
+    animation: rls-gradient-shift 12s ease infinite;
+    color: #fff;
+    border-radius: var(--rls-radius-lg);
+    padding: 24px 32px !important;
+    margin: 14px 0 22px !important;
+    box-shadow: var(--rls-shadow);
+    position: relative;
+    overflow: hidden;
+}
+
+/* Notice boxes (success/warn/danger) */
+.rls-wrap .rls-notice {
+    padding: 12px 16px;
+    border-radius: var(--rls-radius);
+    margin-bottom: 16px;
+    border-left: 3px solid;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+.rls-wrap .rls-notice.is-info    { border-color: var(--rls-info);    background: var(--rls-info-bg); }
+.rls-wrap .rls-notice.is-success { border-color: var(--rls-success); background: var(--rls-success-bg); }
+.rls-wrap .rls-notice.is-warning { border-color: var(--rls-warning); background: var(--rls-warning-bg); }
+.rls-wrap .rls-notice.is-danger  { border-color: var(--rls-danger);  background: var(--rls-danger-bg); }
+
+/* Empty state consistency */
+.rls-empty-state {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--rls-text-subtle);
+}
+.rls-empty-state p {
+    margin: 8px 0;
+    font-size: 13px;
+    color: var(--rls-text-muted);
+}
+.rls-empty-state h3 {
+    margin: 0 0 8px;
+    color: var(--rls-text);
+    font-size: 16px;
+}

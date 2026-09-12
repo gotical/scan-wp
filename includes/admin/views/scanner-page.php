@@ -22,17 +22,7 @@ if ( class_exists( 'RLS_Quarantine' ) ) {
     $quarantined_files = $q_obj->get_quarantined_files();
 }
 ?>
-<div class="wrap rls-wrap">
-
-    <!-- ЗАГОЛОВОК СТРАНИЦЫ -->
-    <h1 class="rls-page-heading">
-        <span class="dashicons dashicons-shield-alt"></span>
-        Сканер безопасности
-        <span class="rls-page-version">v<?php echo esc_html( RLS_VERSION ); ?></span>
-        <span class="rls-mode-badge <?php echo esc_attr( $mode_ui['mode'] ?? 'full' ); ?>">
-            <?php echo esc_html( $mode_ui['label'] ?? 'Полная защита' ); ?>
-        </span>
-    </h1>
+<div class="rls-wrap-inner">
 
     <!-- ВКЛАДКИ -->
     <div class="nav-tab-wrapper" style="margin-bottom:14px;">
@@ -283,4 +273,4 @@ if ( class_exists( 'RLS_Quarantine' ) ) {
         </div>
     </div>
 
-</div>
+</div><!-- .rls-wrap-inner -->
