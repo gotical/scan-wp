@@ -324,24 +324,24 @@ class RLS_Attack_Types {
         $icon = $t['icon'];
         $label = $t['label'];
         $short = esc_attr( $t['short'] );
-        $long = esc_attr( $t['description'] );
-        $vector = esc_attr( $t['attack_vector'] );
-        $example = esc_attr( $t['real_example'] );
         $response = esc_attr( $t['how_to_respond'] );
 
-        $tooltip_html = '<div class=\"rls-attack-tooltip\">';
-        $tooltip_html .= '<div class=\"rls-attack-tooltip__title\">';
-        $tooltip_html .= '<span class=\"dashicons ' . esc_attr( $icon ) . '\"></span>';
-        $tooltip_html .= '<strong>' . esc_html( $label ) . ' <small>(' . esc_html( $t['label_en'] ) . ')</small></strong>';
-        $tooltip_html .= '<span class=\"rls-badge-log ' . esc_attr( $severity ) . '\">' . esc_html( strtoupper( $severity ) ) . '</span>';
+        // Компактный тултип: только самое нужное + ссылка "Подробнее".
+        $detail_url = admin_url( 'admin.php?page=rls-attack-types' );
+        $tooltip_html  = '<div class="rls-attack-tooltip">';
+        $tooltip_html .= '<div class="rls-attack-tooltip__title">';
+        $tooltip_html .= '<span class="dashicons ' . esc_attr( $icon ) . '"></span>';
+        $tooltip_html .= '<strong>' . esc_html( $label ) . '</strong>';
+        $tooltip_html .= '<span class="rls-attack-tooltip__severity rls-attack-tooltip__severity--' . esc_attr( $severity ) . '">' . esc_html( mb_strtoupper( mb_substr( $severity, 0, 1 ) ) ) . '</span>';
         $tooltip_html .= '</div>';
-        $tooltip_html .= '<p class=\"rls-attack-tooltip__desc\">' . esc_html( $long ) . '</p>';
-        if ( ! $compact ) {
-            $tooltip_html .= '<div class=\"rls-attack-tooltip__row\"><strong>Вектор:</strong> ' . esc_html( $vector ) . '</div>';
-            $tooltip_html .= '<div class=\"rls-attack-tooltip__row\"><strong>Пример:</strong> <code>' . esc_html( $example ) . '</code></div>';
-            $tooltip_html .= '<div class=\"rls-attack-tooltip__row\"><strong>Что делать:</strong> ' . esc_html( $response ) . '</div>';
+        $tooltip_html .= '<p class="rls-attack-tooltip__short">' . esc_html( $short ) . '</p>';
+        if ( ! $compact && $response ) {
+            $tooltip_html .= '<div class="rls-attack-tooltip__resp"><span class="dashicons dashicons-shield-alt"></span> ' . esc_html( $response ) . '</div>';
         }
+        $tooltip_html .= '<a class="rls-attack-tooltip__more" href="' . esc_url( $detail_url ) . '" target="_blank" rel="noopener">Подробнее →</a>';
         $tooltip_html .= '</div>';
+
+        $inline_tooltip = 'data-rls-attack-type="' . esc_attr( strtolower( $key ) ) . '" data-rls-tooltip-html=\'' . esc_attr( $tooltip_html ) . '\'';
 
         $inline_tooltip = "data-rls-attack-type=\"" . esc_attr( strtolower( $key ) ) . "\" data-rls-tooltip-html='" . esc_attr( $tooltip_html ) . "'";
 
